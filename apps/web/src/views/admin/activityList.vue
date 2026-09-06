@@ -66,72 +66,8 @@
       @page-change="handlePageChange"
     />
 
-    <!-- 抽奖界面演示 Dialog（ScrollContent：内容超高可滚；长文本 break-all 换行防溢出） -->
-    <Dialog :open="showDemoDialog" @update:open="(v: boolean) => (showDemoDialog = v)">
-      <DialogScrollContent class="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>抽奖界面演示</DialogTitle>
-          <DialogDescription>
-            使用测试抽奖码在真实抽奖页体验完整流程：不扣减奖品库存、不产生抽奖记录，可反复抽。
-          </DialogDescription>
-        </DialogHeader>
-
-        <div v-if="demoLoading" class="py-6 text-center text-sm text-muted-foreground">
-          正在准备测试抽奖码...
-        </div>
-        <div v-else-if="demoError" class="py-6 text-center text-sm text-destructive">
-          {{ demoError }}
-        </div>
-        <div v-else-if="demoCode" class="space-y-4">
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">测试抽奖码（活动固定一个，可反复使用）</div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 text-center font-mono text-lg font-bold tracking-widest break-all"
-              >
-                {{ demoCode }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(demoCode, '抽奖码已复制')"
-              >
-                复制
-              </Button>
-            </div>
-          </div>
-
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">抽奖页链接（自动填入测试码）</div>
-            <!-- break-all 换行显示完整链接：不依赖 flex 收缩链，天然不溢出 -->
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                {{ demoUrl }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(demoUrl, '链接已复制')"
-              >
-                复制
-              </Button>
-            </div>
-            <Button class="w-full" @click="openDemoUrl">
-              <Play class="mr-1 h-4 w-4" />
-              打开抽奖页
-            </Button>
-          </div>
-
-          <p class="text-xs leading-relaxed text-muted-foreground">
-            提示：测试码无视活动状态与起止时间，任意阶段均可演示抽奖；线下抽奖模式需管理员登录后操作。
-          </p>
-        </div>
-      </DialogScrollContent>
-    </Dialog>
+    <!-- 抽奖界面演示 Dialog（共用组件） -->
+    <DemoDrawDialog v-model:open="showDemoDialog" :activity-id="demoActivityId" />
   </div>
 </template>
 
@@ -150,15 +86,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Search, Plus, Trash, SquarePen, Eye, Play } from 'lucide-vue-next'
-import {
-  Dialog,
-  DialogDescription,
-  DialogHeader,
-  DialogScrollContent,
-  DialogTitle,
-} from '@/components/ui/dialog'
-import { toast } from 'vue-sonner'
+import { Search, Plus, Trash, SquarePen, Eye, Play, ExternalLink } from 'lucide-vue-next'
+import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import { API } from '@/api'
 import type { Activity } from '@/types/api'
 import type { TableColumn } from '@/components/common/types'
@@ -278,7 +207,7 @@ const columns = computed<TableColumn[]>(() => [
   {
     key: 'actions',
     title: '操作',
-    width: '160px',
+    width: '200px',
     render: (value: unknown, record: Record<string, unknown>) => {
       const activity = record as unknown as Activity
       return h('div', { class: 'flex items-center gap-2' }, [
@@ -311,6 +240,16 @@ const columns = computed<TableColumn[]>(() => [
             onClick: () => handleDemoActivity(String(activity.id)),
           },
           [h(Play, { size: 16 })],
+        ),
+        h(
+          'button',
+          {
+            class:
+              'inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8',
+            title: '打开实际抽奖页',
+            onClick: () => handleOpenLotteryPage(String(activity.id)),
+          },
+          [h(ExternalLink, { size: 16 })],
         ),
         h(
           'button',
@@ -413,55 +352,17 @@ const handleDeleteActivity = async (id: string) => {
   }
 }
 
-// ---- 抽奖界面演示 ----
+// ---- 抽奖界面演示 / 打开实际抽奖页 ----
 const showDemoDialog = ref(false)
-const demoLoading = ref(false)
-const demoError = ref('')
-const demoCode = ref('')
 const demoActivityId = ref(0)
-const demoUrl = computed(
-  () => `${location.origin}/lottery?activityId=${demoActivityId.value}&code=${demoCode.value}`,
-)
 
-const handleDemoActivity = async (id: string) => {
+const handleDemoActivity = (id: string) => {
   demoActivityId.value = Number(id)
   showDemoDialog.value = true
-  demoLoading.value = true
-  demoError.value = ''
-  demoCode.value = ''
-  try {
-    const res = await API.adminActivity.ensureDemoCode(Number(id))
-    demoCode.value = res.lottery_code.code
-  } catch (error) {
-    demoError.value = error instanceof Error ? error.message : '获取测试抽奖码失败'
-  } finally {
-    demoLoading.value = false
-  }
 }
 
-const copyText = async (text: string, successMessage: string) => {
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      // 非安全上下文（如局域网 http）回退：隐藏 textarea + execCommand
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-    }
-    toast.success(successMessage)
-  } catch {
-    toast.error('复制失败，请手动复制')
-  }
-}
-
-const openDemoUrl = () => {
-  window.open(demoUrl.value, '_blank')
+const handleOpenLotteryPage = (id: string) => {
+  window.open(`${location.origin}/lottery?activityId=${id}`, '_blank')
 }
 
 // 组件挂载时获取数据

@@ -29,7 +29,7 @@
         </div>
 
         <!-- 按流转矩阵渲染操作 -->
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <template v-if="activity?.status === 'draft'">
             <Button :disabled="transitioning" @click="handleTransition('ready')">
               发布（就绪）
@@ -53,6 +53,18 @@
             </Button>
           </template>
           <span v-else class="text-xs text-muted-foreground self-center"> 活动已结束（终态） </span>
+
+          <!-- 抽奖入口（独立于流转：任意状态可用） -->
+          <div class="flex gap-2 border-l pl-4 ml-2">
+            <Button variant="outline" @click="showDemoDialog = true">
+              <Play class="mr-1 h-4 w-4" />
+              抽奖界面演示
+            </Button>
+            <Button variant="outline" @click="openLotteryPage">
+              <ExternalLink class="mr-1 h-4 w-4" />
+              打开抽奖页
+            </Button>
+          </div>
         </div>
       </div>
     </div>
@@ -109,6 +121,9 @@
       />
     </div>
 
+    <!-- 抽奖界面演示 Dialog（共用组件） -->
+    <DemoDrawDialog v-model:open="showDemoDialog" :activity-id="activityId" />
+
     <!-- 签字预览 Dialog -->
     <Dialog :open="showSignaturePreview" @update:open="showSignaturePreview = $event">
       <DialogContent class="max-w-2xl mx-4">
@@ -144,7 +159,8 @@ import DataTable from '@/components/common/DataTable.vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Package, Gift, Search, Ticket, Eye } from 'lucide-vue-next'
+import { Package, Gift, Search, Ticket, Eye, Play, ExternalLink } from 'lucide-vue-next'
+import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import { API } from '@/api'
 import { toast } from 'vue-sonner'
 import type { Activity, Prize, LotteryRecord } from '@/types/api'
@@ -321,6 +337,12 @@ const handleTransition = async (target: 'draft' | 'ready' | 'active' | 'ended') 
   } finally {
     transitioning.value = false
   }
+}
+
+// ---- 抽奖入口 ----
+const showDemoDialog = ref(false)
+const openLotteryPage = () => {
+  window.open(`${location.origin}/lottery?activityId=${activityId}`, '_blank')
 }
 
 // 获取奖品列表
