@@ -1,10 +1,20 @@
 <template>
   <Dialog :open="visible" @update:open="handleOpenChange">
-    <DialogContent class="max-w-2xl mx-4 rounded-2xl border-0 shadow-2xl">
+    <DialogContent
+      class="max-w-2xl mx-4 rounded-2xl border-0 shadow-2xl"
+      :show-close-button="dismissible !== false"
+      @escape-key-down="dismissible === false && $event.preventDefault()"
+      @pointer-down-outside="dismissible === false && $event.preventDefault()"
+      @interact-outside="dismissible === false && $event.preventDefault()"
+    >
       <DialogHeader class="pb-4">
         <DialogTitle class="text-xl font-bold text-center"> 请在下方区域签字 </DialogTitle>
         <DialogDescription class="text-center text-sm text-gray-500">
-          请使用鼠标或触屏在下方区域完成签字，签字后点击确认提交
+          {{
+            dismissible
+              ? '请使用鼠标或触屏在下方区域完成签字，签字后点击确认提交'
+              : '本次抽奖需要签字确认后才能完成，请使用鼠标或触屏在下方区域签字'
+          }}
         </DialogDescription>
       </DialogHeader>
 
@@ -47,7 +57,13 @@
           </div>
 
           <div class="flex gap-2">
-            <Button type="button" variant="outline" :disabled="isSubmitting" @click="handleCancel">
+            <Button
+              v-if="dismissible"
+              type="button"
+              variant="outline"
+              :disabled="isSubmitting"
+              @click="handleCancel"
+            >
               取消
             </Button>
             <Button
@@ -89,6 +105,8 @@ const props = defineProps<{
   visible: boolean
   isSubmitting?: boolean
   errorMessage?: string
+  /** false = 必签模式：无取消按钮、禁 ESC/遮罩/关闭按钮，仅提交成功后由父组件关闭 */
+  dismissible?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -210,8 +228,10 @@ function handleCancel() {
 }
 
 function handleOpenChange(open: boolean) {
+  // 必签模式拦截一切关闭请求（ESC/遮罩/按钮），仅父组件提交成功后程序化关闭
+  if (!open && props.dismissible === false) return
   emit('update:visible', open)
-  if (!open) {
+  if (!open && props.dismissible !== false) {
     emit('cancel')
   }
 }

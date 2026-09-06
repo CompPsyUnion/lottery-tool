@@ -124,6 +124,15 @@
     <!-- 抽奖界面演示 Dialog（共用组件） -->
     <DemoDrawDialog v-model:open="showDemoDialog" :activity-id="activityId" />
 
+    <!-- 补签 Dialog（管理面板操作，可取消） -->
+    <SignatureDialog
+      v-model:visible="showResignDialog"
+      :is-submitting="isSubmittingResign"
+      :error-message="resignError"
+      @confirm="handleResignConfirm"
+      @cancel="showResignDialog = false"
+    />
+
     <!-- 签字预览 Dialog -->
     <Dialog :open="showSignaturePreview" @update:open="showSignaturePreview = $event">
       <DialogContent class="max-w-2xl mx-4">
@@ -159,8 +168,9 @@ import DataTable from '@/components/common/DataTable.vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Package, Gift, Search, Ticket, Eye, Play, ExternalLink } from 'lucide-vue-next'
+import { Package, Gift, Search, Ticket, Eye, Play, ExternalLink, PenLine } from 'lucide-vue-next'
 import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
+import SignatureDialog from '@/components/common/SignatureDialog.vue'
 import { API } from '@/api'
 import { toast } from 'vue-sonner'
 import type { Activity, Prize, LotteryRecord } from '@/types/api'
@@ -275,6 +285,18 @@ const columns: TableColumn[] = [
             onClick: () => openSignaturePreview(record),
           },
           [h(Eye, { class: 'w-4 h-4' }), '已签'],
+        )
+      }
+      // 未签：线下活动的记录提供补签入口（真实/演示记录均可）
+      if (activity.value?.lottery_mode === 'offline') {
+        return h(
+          'button',
+          {
+            class:
+              'inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium',
+            onClick: () => openResign(record),
+          },
+          [h(PenLine, { class: 'w-4 h-4' }), '补签'],
         )
       }
       return h(
@@ -402,6 +424,38 @@ const openSignaturePreview = async (record: LotteryRecord) => {
     showSignaturePreview.value = true
   } catch (err) {
     console.error('获取签字图片失败:', err)
+  }
+}
+
+// ---- 补签（未签字的线下记录） ----
+const showResignDialog = ref(false)
+const isSubmittingResign = ref(false)
+const resignError = ref('')
+const resignRecordId = ref<number | null>(null)
+
+const openResign = (record: LotteryRecord) => {
+  resignRecordId.value = record.id
+  resignError.value = ''
+  showResignDialog.value = true
+}
+
+const handleResignConfirm = async (dataUrl: string) => {
+  if (!resignRecordId.value) return
+  isSubmittingResign.value = true
+  resignError.value = ''
+  try {
+    await API.adminActivity.uploadSignature(activityId, resignRecordId.value, {
+      image: dataUrl,
+    })
+    toast.success('补签成功')
+    showResignDialog.value = false
+    resignRecordId.value = null
+    await fetchLotteryRecords()
+  } catch (err) {
+    resignError.value = err instanceof Error ? err.message : '补签失败，请重试'
+    toast.error(resignError.value)
+  } finally {
+    isSubmittingResign.value = false
   }
 }
 

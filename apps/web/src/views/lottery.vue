@@ -181,7 +181,16 @@
 
         <DialogFooter class="pt-6">
           <div class="w-full flex justify-center">
+            <!-- 需要签字：主按钮为「去签字」，手动进入必签流程（不再自动跳转） -->
             <button
+              v-if="pendingSignature"
+              class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
+              @click="goSignature"
+            >
+              去签字确认
+            </button>
+            <button
+              v-else
               class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
               @click="closeResult"
             >
@@ -192,13 +201,13 @@
       </DialogContent>
     </Dialog>
 
-    <!-- 签字弹窗 -->
+    <!-- 签字弹窗（必签：不可取消/ESC/遮罩关闭，提交成功才结束） -->
     <SignatureDialog
       v-model:visible="showSignature"
       :is-submitting="isSubmittingSignature"
       :error-message="signatureError"
+      :dismissible="false"
       @confirm="handleSignatureConfirm"
-      @cancel="handleSignatureCancel"
     />
 
     <!-- Toast 组件 -->
@@ -259,6 +268,8 @@ const showSignature = ref(false)
 const isSubmittingSignature = ref(false)
 const signatureError = ref('')
 const currentRecordId = ref<number | null>(null)
+/** 本次抽奖需要签字（结果弹窗据此展示「去签字」按钮，手动进入） */
+const pendingSignature = ref(false)
 
 // 参与者信息（仅online模式需要）
 const participantInfo = ref({
@@ -456,19 +467,14 @@ const handleDraw = async () => {
 
     showResult.value = true
 
-    // 线下抽奖且活动开启了签字功能时，弹出签字弹窗
+    // 线下抽奖且开启签字：结果弹窗提供「去签字」按钮，手动点击后进入必签流程
     const isOffline = activityInfo.value?.lottery_mode === 'offline'
     const requireSignature = activityInfo.value?.settings?.require_signature === true
     const recordId = drawResponse.lottery_record?.id
+    pendingSignature.value = !!(isOffline && requireSignature && recordId)
+    if (recordId) currentRecordId.value = recordId
 
-    if (isOffline && requireSignature && recordId) {
-      currentRecordId.value = recordId
-      // 延迟一下再弹出签字，让用户先看到抽奖结果
-      setTimeout(() => {
-        showResult.value = false
-        showSignature.value = true
-      }, 1500)
-    } else {
+    if (!pendingSignature.value) {
       // 不需要签字时，5秒后自动关闭结果弹窗
       setTimeout(() => {
         if (showResult.value) {
@@ -519,9 +525,16 @@ const handleDraw = async () => {
 const closeResult = () => {
   showResult.value = false
   lotteryResult.value = null
+  pendingSignature.value = false
 }
 
-// 签字确认
+// 从结果弹窗进入签字（手动触发）
+const goSignature = () => {
+  showResult.value = false
+  showSignature.value = true
+}
+
+// 签字确认（提交成功才关闭；失败保持弹窗可重试）
 const handleSignatureConfirm = async (dataUrl: string) => {
   if (!currentRecordId.value || !activityId) return
 
@@ -536,6 +549,7 @@ const handleSignatureConfirm = async (dataUrl: string) => {
     showSignature.value = false
     currentRecordId.value = null
     lotteryResult.value = null
+    pendingSignature.value = false
   } catch (err) {
     let errorMessage = '签字上传失败，请重试'
     if (err && typeof err === 'object' && 'message' in err) {
@@ -546,15 +560,6 @@ const handleSignatureConfirm = async (dataUrl: string) => {
   } finally {
     isSubmittingSignature.value = false
   }
-}
-
-// 签字取消
-const handleSignatureCancel = () => {
-  showSignature.value = false
-  signatureError.value = ''
-  currentRecordId.value = null
-  lotteryResult.value = null
-  toast.info('已取消签字，抽奖结果已保存')
 }
 
 // 组件挂载时加载数据
