@@ -799,8 +799,8 @@ router.get('/overview', async (req: Request, res: Response, next: NextFunction) 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const [totalRecords, todayRecords] = await Promise.all([
-      recordRepo.count(),
-      recordRepo.count({ where: { created_at: MoreThanOrEqual(today) } }),
+      recordRepo.count({ where: { is_test: false } }),
+      recordRepo.count({ where: { created_at: MoreThanOrEqual(today), is_test: false } }),
     ])
 
     // 系统运行时间（这里简化处理，实际可以从配置文件读取启动时间）

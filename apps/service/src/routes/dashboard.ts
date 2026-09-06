@@ -32,7 +32,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           AppDataSource.getRepository(User).count({
             where: { role: In(['admin', 'super_admin']) },
           }),
-          AppDataSource.getRepository(LotteryRecord).count(),
+          AppDataSource.getRepository(LotteryRecord).count({ where: { is_test: false } }),
         ])
 
       dashboardData = {

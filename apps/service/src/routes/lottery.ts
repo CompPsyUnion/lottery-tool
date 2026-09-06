@@ -117,18 +117,33 @@ router.post(
           throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在或不属于此活动')
         }
 
-        // 演示测试码短路：概率照算走完整体验，但不扣库存、不置 used、不写记录。
-        // 置于状态/时间/used 检查之前——测试码无视活动起止与状态，「永远可抽」，
-        // 供管理员在任意阶段演示抽奖界面
+        // 演示测试码短路：概率照算走完整体验，但不扣库存、不置 used；
+        // 写一条 is_test 演示记录（复用不堆积）以支撑签字流程演示。
+        // 置于状态/时间/used 检查之前——测试码无视活动起止与状态，「永远可抽」
         if (lotteryCodeRecord.is_test) {
           const demoPrize = await PrizeService.selectByProbability(parseInt(activityId), activity, {
             manager,
           })
           const demoWinner = !!demoPrize
+          const demoRecord = await LotteryRecordService.upsertDemoRecord(
+            {
+              activity_id: parseInt(activityId),
+              lottery_code_id: lotteryCodeRecord.id,
+              prize_id: demoPrize ? demoPrize.id : null,
+              is_winner: demoWinner,
+              operator_id: null,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+            },
+            manager,
+          )
           const demoData: Record<string, unknown> = {
             is_winner: demoWinner,
             is_demo: true,
-            lottery_record: null,
+            lottery_record: {
+              id: demoRecord.id,
+              created_at: demoRecord.created_at,
+            },
             lottery_code: {
               code: lotteryCodeRecord.code,
               participant_info: lotteryCodeRecord.participant_info || {},
@@ -290,7 +305,7 @@ router.post(
         }
 
         // 演示测试码短路：同线上 draw——置于状态/时间检查之前（无视活动起止与状态），
-        // 指定 prize_id 时照常校验但不扣库存
+        // 指定 prize_id 时照常校验但不扣库存；写 is_test 演示记录（带 operator_id 可走签字）
         if (lotteryCodeRecord.is_test) {
           let demoPrize: Prize | null = null
           if (prize_id) {
@@ -307,10 +322,25 @@ router.post(
               manager,
             })
           }
+          const demoRecord = await LotteryRecordService.upsertDemoRecord(
+            {
+              activity_id: parseInt(activityId),
+              lottery_code_id: lotteryCodeRecord.id,
+              prize_id: demoPrize ? demoPrize.id : null,
+              is_winner: !!demoPrize,
+              operator_id: (req as any).user.id,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+            },
+            manager,
+          )
           const demoData: Record<string, unknown> = {
             is_winner: !!demoPrize,
             is_demo: true,
-            lottery_record: null,
+            lottery_record: {
+              id: demoRecord.id,
+              created_at: demoRecord.created_at,
+            },
             lottery_code: {
               code: lotteryCodeRecord.code,
               participant_info: lotteryCodeRecord.participant_info || {},

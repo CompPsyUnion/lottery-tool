@@ -82,7 +82,7 @@ const openDemoUrl = () => {
       <DialogHeader>
         <DialogTitle>抽奖界面演示</DialogTitle>
         <DialogDescription>
-          使用测试抽奖码在真实抽奖页体验完整流程：不扣减奖品库存、不产生抽奖记录，可反复抽。
+          使用测试抽奖码在真实抽奖页体验完整流程（含签字）：不扣减奖品库存，演示记录不计入统计，可反复抽。
         </DialogDescription>
       </DialogHeader>
 

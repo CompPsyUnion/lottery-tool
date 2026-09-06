@@ -12,6 +12,7 @@ export interface CreateRecordData {
   operator_id?: number | null
   ip_address?: string | null
   user_agent?: string | null
+  is_test?: boolean
 }
 
 // 原createRecord
@@ -27,6 +28,7 @@ export function createRecord(
     operator_id = null,
     ip_address = null,
     user_agent = null,
+    is_test = false,
   } = data
 
   return managerOf(manager).getRepository(LotteryRecord).save({
@@ -37,7 +39,32 @@ export function createRecord(
     operator_id,
     ip_address,
     user_agent,
+    is_test,
   })
+}
+
+/**
+ * 演示记录 upsert：测试码每次抽奖复用同一条 is_test 记录（不堆积），
+ * 重抽时更新结果并重置签字状态（可重新演示签字）。真实码不走此函数。
+ */
+export async function upsertDemoRecord(
+  data: CreateRecordData,
+  manager?: EntityManager,
+): Promise<LotteryRecord> {
+  const repo = managerOf(manager).getRepository(LotteryRecord)
+  const existing = await repo.findOneBy({ lottery_code_id: data.lottery_code_id })
+  if (existing) {
+    existing.prize_id = data.prize_id ?? null
+    existing.is_winner = data.is_winner ?? false
+    existing.operator_id = data.operator_id ?? null
+    existing.ip_address = data.ip_address ?? null
+    existing.user_agent = data.user_agent ?? null
+    existing.signature_data = null
+    existing.signed_at = null
+    existing.signature_status = 'unsigned'
+    return repo.save(existing)
+  }
+  return createRecord({ ...data, is_test: true }, manager)
 }
 
 // 原updateSignature
@@ -109,6 +136,8 @@ export async function findByActivity(
     .leftJoinAndSelect('record.activity', 'activity')
     .leftJoinAndSelect('record.operator', 'operator')
     .where('record.activity_id = :activityId', { activityId })
+    // 演示记录（测试码 upsert 产物）不进管理端列表
+    .andWhere('record.is_test = false')
 
   if (winner_only) {
     qb.andWhere('record.is_winner = :isWinner', { isWinner: true })
@@ -174,6 +203,7 @@ export async function findByOperator(
     .leftJoinAndSelect('record.prize', 'prize')
     .leftJoinAndSelect('record.activity', 'activity')
     .where('record.operator_id = :operatorId', { operatorId })
+    .andWhere('record.is_test = false')
 
   if (activity_id) {
     qb.andWhere('record.activity_id = :activityId', { activityId: activity_id })
@@ -206,11 +236,12 @@ export async function getWinningStatistics(
 
   const repo = AppDataSource.getRepository(LotteryRecord)
 
-  // 按奖品分组统计（联奖品名）
+  // 按奖品分组统计（联奖品名；排除演示记录）
   const prizeStats = await repo
     .createQueryBuilder('record')
     .innerJoinAndSelect('record.prize', 'prize')
     .where('record.activity_id = :activityId', { activityId })
+    .andWhere('record.is_test = false')
     .andWhere('record.is_winner = :isWinner', { isWinner: true })
     .andWhere(start_date ? 'record.created_at >= :startDate' : '1=1', {
       ...(start_date ? { startDate: new Date(start_date) } : {}),
@@ -225,10 +256,11 @@ export async function getWinningStatistics(
     .addGroupBy('prize.name')
     .getRawMany()
 
-  // 按日期分组统计（MySQL fn('DATE') → PG ::date）
+  // 按日期分组统计（MySQL fn('DATE') → PG ::date；排除演示记录）
   const dailyStats = await repo
     .createQueryBuilder('record')
     .where('record.activity_id = :activityId', { activityId })
+    .andWhere('record.is_test = false')
     .andWhere('record.is_winner = :isWinner', { isWinner: true })
     .andWhere(start_date ? 'record.created_at >= :startDate' : '1=1', {
       ...(start_date ? { startDate: new Date(start_date) } : {}),
@@ -242,7 +274,11 @@ export async function getWinningStatistics(
     .orderBy(`record.created_at::date`, 'ASC')
     .getRawMany()
 
-  const totalWinners = await repo.countBy({ activity_id: activityId, is_winner: true })
+  const totalWinners = await repo.countBy({
+    activity_id: activityId,
+    is_winner: true,
+    is_test: false,
+  })
 
   return {
     total_winners: totalWinners,
@@ -252,13 +288,17 @@ export async function getWinningStatistics(
 }
 
 export function getTotalRecords(activityId: number): Promise<number> {
-  return AppDataSource.getRepository(LotteryRecord).countBy({ activity_id: activityId })
+  return AppDataSource.getRepository(LotteryRecord).countBy({
+    activity_id: activityId,
+    is_test: false,
+  })
 }
 
 export function getTotalWinners(activityId: number): Promise<number> {
   return AppDataSource.getRepository(LotteryRecord).countBy({
     activity_id: activityId,
     is_winner: true,
+    is_test: false,
   })
 }
 

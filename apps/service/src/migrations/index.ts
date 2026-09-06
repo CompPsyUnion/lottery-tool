@@ -11,6 +11,7 @@ import { SignatureToPgsql1788027007612 } from './1788027007612-SignatureToPgsql'
 import { AddSystemSettings1788091777967 } from './1788091777967-AddSystemSettings'
 import { AddLotteryCodeIsTest1788417306770 } from './1788417306770-AddLotteryCodeIsTest'
 import { AddActivityStatusReady1788431974008 } from './1788431974008-AddActivityStatusReady'
+import { AddLotteryRecordIsTest1788443250000 } from './1788443250000-AddLotteryRecordIsTest'
 
 // typeorm@1 typings expect `MixedList<string | Function>` for the DataSource
 // option; migration classes satisfy that at runtime (classes are functions)
@@ -21,4 +22,5 @@ export const migrations = [
   AddSystemSettings1788091777967,
   AddLotteryCodeIsTest1788417306770,
   AddActivityStatusReady1788431974008,
+  AddLotteryRecordIsTest1788443250000,
 ] as unknown as (string | Function)[]

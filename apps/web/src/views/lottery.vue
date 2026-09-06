@@ -175,7 +175,7 @@
           </div>
 
           <p v-if="lotteryResult?.is_demo" class="text-center text-xs text-muted-foreground">
-            测试演示——未扣减奖品库存、未写入抽奖记录
+            测试演示——未扣减奖品库存，演示记录不计入统计
           </p>
         </div>
 
