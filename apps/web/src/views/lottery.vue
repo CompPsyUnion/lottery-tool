@@ -467,11 +467,13 @@ const handleDraw = async () => {
 
     showResult.value = true
 
-    // 线下抽奖且开启签字：结果弹窗提供「去签字」按钮，手动点击后进入必签流程
+    // 线下抽奖且开启签字：结果弹窗提供「去签字」按钮，手动点击后进入必签流程。
+    // 未中奖不需要签字（记录留为未签，可经记录页补签）
     const isOffline = activityInfo.value?.lottery_mode === 'offline'
     const requireSignature = activityInfo.value?.settings?.require_signature === true
     const recordId = drawResponse.lottery_record?.id
-    pendingSignature.value = !!(isOffline && requireSignature && recordId)
+    const isWinner = drawResponse.is_winner === true
+    pendingSignature.value = !!(isOffline && requireSignature && recordId && isWinner)
     if (recordId) currentRecordId.value = recordId
 
     if (!pendingSignature.value) {

@@ -140,24 +140,31 @@ function resizeCanvas() {
   // 重新初始化 signature_pad
   if (signaturePad.value) {
     const data = signaturePad.value.toData()
-    // signature_pad 5.x 的 Options 类型未收录 onEnd 回调，运行时支持，整体断言
     signaturePad.value = new SignaturePad(canvas, {
       backgroundColor: 'rgb(255, 255, 255)',
       penColor: 'rgb(0, 0, 0)',
       minWidth: 1,
       maxWidth: 3,
-      onEnd: () => {
-        isEmpty.value = signaturePad.value?.isEmpty() ?? true
-        canUndo.value = true
-        saveState()
-      },
-    } as any)
+    })
     if (data && data.length > 0) {
       signaturePad.value.fromData(data)
-      isEmpty.value = false
-      canUndo.value = true
     }
+    syncState()
   }
+}
+
+/**
+ * 实时同步签字状态。signature_pad 5.x 已移除 options 的 onEnd 回调，
+ * 也没有 stroke 事件——在 canvas 上监听 pointerup 自行同步（此前依赖
+ * onEnd 导致 isEmpty 永远为 true，确认按钮恒灰）。
+ */
+function syncState() {
+  const pad = signaturePad.value
+  if (!pad) return
+  isEmpty.value = pad.isEmpty()
+  canUndo.value = pad.toData().length > 0
+  // 每笔结束入撤销历史
+  if (!isEmpty.value) saveState()
 }
 
 function saveState() {
@@ -179,12 +186,11 @@ function initSignaturePad() {
     penColor: 'rgb(0, 0, 0)',
     minWidth: 1,
     maxWidth: 3,
-    onEnd: () => {
-      isEmpty.value = signaturePad.value?.isEmpty() ?? true
-      canUndo.value = true
-      saveState()
-    },
-  } as any)
+  })
+
+  // 5.x 无 onEnd/stroke 事件：pointerup（覆盖鼠标/触屏/笔）时同步状态
+  canvas.addEventListener('pointerup', syncState)
+  canvas.addEventListener('pointercancel', syncState)
 
   isEmpty.value = true
   canUndo.value = false
