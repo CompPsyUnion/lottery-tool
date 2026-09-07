@@ -181,6 +181,9 @@ function initSignaturePad() {
   const canvas = canvasRef.value
   if (!canvas) return
 
+  // 防止 watch(visible) 重复 init 时重复挂载
+  removeStrokeListeners()
+
   signaturePad.value = new SignaturePad(canvas, {
     backgroundColor: 'rgb(255, 255, 255)',
     penColor: 'rgb(0, 0, 0)',
@@ -188,13 +191,38 @@ function initSignaturePad() {
     maxWidth: 3,
   })
 
-  // 5.x 无 onEnd/stroke 事件：pointerup（覆盖鼠标/触屏/笔）时同步状态
-  canvas.addEventListener('pointerup', syncState)
-  canvas.addEventListener('pointercancel', syncState)
+  // 5.x 无 onEnd/stroke 事件：以 pointer 抬起同步状态。
+  // 库的 move/up 监听挂 window（出画布抬起也能结束笔画），因此状态同步
+  // 同样挂 window——若只挂 canvas，一笔在框外结束时收不到 pointerup，
+  // 确认按钮会保持灰色（"这一笔无法结束"）。canvas pointerdown 标记起笔，
+  // window pointerup/pointercancel 时同步，避免无关全局指针事件干扰。
+  canvas.addEventListener('pointerdown', handleStrokeStart)
+  window.addEventListener('pointerup', handleStrokeEnd)
+  window.addEventListener('pointercancel', handleStrokeEnd)
 
   isEmpty.value = true
   canUndo.value = false
   history.value = []
+}
+
+let strokeActive = false
+
+function handleStrokeStart() {
+  strokeActive = true
+}
+
+function handleStrokeEnd() {
+  if (!strokeActive) return
+  strokeActive = false
+  syncState()
+}
+
+function removeStrokeListeners() {
+  const canvas = canvasRef.value
+  canvas?.removeEventListener('pointerdown', handleStrokeStart)
+  window.removeEventListener('pointerup', handleStrokeEnd)
+  window.removeEventListener('pointercancel', handleStrokeEnd)
+  strokeActive = false
 }
 
 function handleClear() {
@@ -253,6 +281,8 @@ watch(
       await nextTick()
       initSignaturePad()
       resizeCanvas()
+    } else {
+      removeStrokeListeners()
     }
   },
 )
@@ -263,6 +293,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', handleResize)
+  removeStrokeListeners()
 })
 </script>
 
