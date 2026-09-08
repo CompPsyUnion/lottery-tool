@@ -3,13 +3,16 @@
 🌍 [中文版](README_zh.md) | English
 
 A complete lottery system backend service supporting multiple lottery modes, built with Node.js + Express.js + PostgreSQL.
-Provides OpenAPI-compliant JSON protocol documentation for easy API viewing and testing by frontend developers.
 
 ## Features
 
 - 🎯 **Multiple Lottery Modes**: Supports online and offline lottery
-- 🔐 **Permission Management**: Super admin and regular admin roles
+- 🔄 **Activity Lifecycle**: `draft → ready → active → ended` with a 60s scheduler that auto-starts ready activities at `start_time` and auto-ends them at `end_time` (transitions guarded by a state matrix, `PATCH /admin/activities/:id/status`)
 - 🎫 **Lottery Code System**: Supports multiple lottery code generation formats
+- 🧪 **Demo Test Codes**: Each activity has one idempotent test code — draws run the full flow (including signature) without touching prize stock or real records
+- ✍️ **Signature Confirmation**: Optional post-draw signature for offline mode (stored in DB), with resign support from the records page
+- 📧 **Email Verification Codes**: Registration codes sent via an email-poster POST webhook (no SMTP); channel configured in the super admin settings page
+- 🔐 **Permission Management**: Super admin and regular admin roles
 - 🔗 **Webhook Support**: Third-party systems can add lottery codes via Webhook
 - 📊 **Complete Statistics**: Detailed lottery records and statistical data
 - 🛡️ **Secure & Reliable**: JWT authentication, operation logs, error handling
@@ -17,7 +20,7 @@ Provides OpenAPI-compliant JSON protocol documentation for easy API viewing and 
 ## Tech Stack
 
 - **Backend Framework**: Node.js + Express.js
-- **Database**: PostgreSQL 16+
+- **Database**: PostgreSQL 18+
 - **ORM**: TypeORM 1.1
 - **Authentication**: JWT
 - **Logging**: Winston
@@ -27,8 +30,8 @@ Provides OpenAPI-compliant JSON protocol documentation for easy API viewing and 
 
 ### 1. Requirements
 
-- Node.js >= 16.0.0
-- PostgreSQL >= 16
+- Node.js >= 20
+- PostgreSQL >= 18
 - npm or yarn
 
 ### 2. Install Dependencies
@@ -39,7 +42,7 @@ pnpm install
 
 ### 3. Start Service (no installer)
 
-On first boot, migrations create the schema automatically. **The first user to register via `/auth/register` becomes the super administrator**; afterwards registration requires a super admin token.
+On first boot, migrations create the schema automatically. **The first user to register via `/auth/register` becomes the super administrator**; afterwards public registration (on by default, toggleable by the super admin) requires an email verification code — or accounts can be created directly with a super admin token.
 
 ```bash
 # Production mode
@@ -89,12 +92,12 @@ The system supports the following lottery code formats:
 
 ## API Usage Examples
 
-Please refer to the API documentation. OpenAPI protocol is provided, and you can import `openapi.json` into Swagger UI or other API tools for testing.
+Routes live under `src/routes/` (no `/api` prefix — the service serves them at the root, e.g. `POST /auth/login`).
 
 ### Admin Login
 
 ```bash
-curl -X POST http://localhost:3000/api/auth/login \
+curl -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",
@@ -105,7 +108,7 @@ curl -X POST http://localhost:3000/api/auth/login \
 ### Create Activity
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/activities \
+curl -X POST http://localhost:3000/admin/activities \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -124,7 +127,7 @@ curl -X POST http://localhost:3000/api/admin/activities \
 ### Batch Create Lottery Codes
 
 ```bash
-curl -X POST http://localhost:3000/api/admin/activities/1/lottery-codes/batch \
+curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -135,11 +138,30 @@ curl -X POST http://localhost:3000/api/admin/activities/1/lottery-codes/batch \
 ### User Lottery Draw
 
 ```bash
-curl -X POST http://localhost:3000/api/lottery/activities/1/draw \
+curl -X POST http://localhost:3000/lottery/activities/1/draw \
   -H "Content-Type: application/json" \
   -d '{
     "lottery_code": "12345678"
   }'
+```
+
+### Activity Lifecycle
+
+Activities are created as `draft` and move through `draft → ready → active → ended`
+(transitions are guarded; `ended` is final, `ready` can be withdrawn). A scheduler
+(60s interval, catch-up on boot) starts `ready` activities once `start_time` passes
+(no `start_time` = starts immediately) and ends them at `end_time`.
+
+```bash
+# Publish (draft → ready); also: ready → active (start now), active → ended, ready → draft (withdraw)
+curl -X PATCH http://localhost:3000/admin/activities/1/status \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{ "status": "ready" }'
+
+# Idempotent demo test code (one per activity; draws bypass stock/records)
+curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
+  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ## Webhook Integration
@@ -147,14 +169,14 @@ curl -X POST http://localhost:3000/api/lottery/activities/1/draw \
 ### Get Webhook Information
 
 ```bash
-curl -X GET http://localhost:3000/api/admin/activities/1/webhook-info \
+curl -X GET http://localhost:3000/admin/activities/1/webhook-info \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### Add Lottery Codes via Webhook
 
 ```bash
-curl -X POST http://localhost:3000/api/webhook/activities/WEBHOOK_ID/lottery-codes \
+curl -X POST http://localhost:3000/webhook/activities/WEBHOOK_ID/lottery-codes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer WEBHOOK_TOKEN" \
   -d '{
@@ -175,22 +197,23 @@ apps/service/
 │   ├── app.ts                 # 应用入口（启动即跑迁移）
 │   ├── entities/              # TypeORM 实体（表结构唯一来源）
 │   ├── migrations/            # 自动生成的迁移 + index.ts barrel
-│   ├── services/              # 业务服务（原 model 静态方法）
+│   ├── services/              # 业务服务（原 model 静态方法；含 activity-status-scheduler 定时流转）
 │   ├── middleware/
 │   │   ├── auth.ts           # 认证中间件
-│   │   ├── errorHandler.ts   # 错误处理
-│   │   └── operationLogger.ts # 操作日志
+│   │   ├── error-handler.ts  # 错误处理
+│   │   └── operation-logger.ts # 操作日志
 │   ├── routes/               # 路由
-│   │   ├── auth.ts          # 认证路由（首位注册即超管）
+│   │   ├── auth.ts          # 认证路由（首位注册即超管；注册邮箱验证码）
 │   │   ├── admin/           # 管理员路由
-│   │   ├── lottery.ts       # 抽奖路由
+│   │   ├── lottery.ts       # 抽奖路由（draw/offline-draw/签字）
 │   │   ├── webhook.ts       # Webhook路由
-│   │   └── system.ts        # 系统管理路由
+│   │   └── system.ts        # 系统管理路由（邮件通道配置等）
 │   └── utils/
 │       ├── database.ts      # DataSource（PG 连接 + 迁移执行）
 │       ├── logger.ts
-│       ├── customError.ts
-│       └── lotteryCodeGenerator.ts
+│       ├── custom-error.ts
+│       ├── mail-theme.ts    # 邮件 HTML 模板（email-poster 内置模板 + 站点主题）
+│       └── lottery-code-generator.ts
 ├── scripts/                  # 迁移 CLI + API 冒烟（tsup 构建到 scripts/dist）
 ├── tsup.config.ts / tsup.dev.config.ts
 ├── docker-compose.yml        # 含 PostgreSQL 18 服务
@@ -218,10 +241,18 @@ DB_PASSWORD=your_password
 JWT_SECRET=your_secret_key
 JWT_EXPIRES_IN=24h
 
+# Super admin bootstrap (optional; auto-created on boot when the user table is empty)
+SUPER_ADMIN_USERNAME=admin
+SUPER_ADMIN_PASSWORD=your_password
+SUPER_ADMIN_EMAIL=admin@example.com
+
 # Logging configuration
 LOG_LEVEL=info
 LOG_FILE=logs/app.log
 ```
+
+The email channel for registration verification codes is configured at runtime on
+the super admin settings page (email-poster POST webhook — no SMTP env vars).
 
 ## Development Notes
 

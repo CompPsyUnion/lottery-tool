@@ -76,7 +76,7 @@ VITE_APP_TITLE=抽奖工具
 
 ```json
 {
-  "rewrites": [{ "source": "/*", "destination": "/index.html" }]
+   "rewrites": [{ "source": "/*", "destination": "/index.html" }]
 }
 ```
 

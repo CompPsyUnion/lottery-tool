@@ -10,7 +10,7 @@
 
 ## 技术栈
 
-- **后端**：Node.js + Express + TypeORM 1.1 + PostgreSQL 16+（迁移自动生成，启动即应用）
+- **后端**：Node.js + Express + TypeORM 1.1 + PostgreSQL 18（迁移自动生成，启动即应用）
 - **前端**：Vue 3 + vue-router + Vite（SPA，`VITE_API_BASE_URL` 配置 API 地址）
 - **工程化**：pnpm workspace、ESLint 9（typescript-eslint）+ Prettier、husky 提交钩子、GitHub Actions 构建后端镜像至 GHCR
 
@@ -60,7 +60,18 @@ pnpm dev                        # 启动后端（启动时自动应用数据库�
 [apps/service/README.md](apps/service/README.md) 的迁移工作流章节）。
 
 首次使用：服务启动后通过 `/auth/register` 注册——**首位注册用户自动成为超级管理员**；
-之后注册开放与否由超管在系统设置中控制（默认开启）。
+之后公开注册默认开启（超管可关闭），需通过邮箱验证码（邮件通道在超管设置页配置，
+email-poster POST webhook 形式，无 SMTP）。
+
+## 核心概念
+
+- **活动状态机**：`draft → ready → active → ended`。`ready` 到达开始时间自动开始
+  （60 秒定时任务，未设开始时间则立即），到结束时间自动结束；流转受矩阵约束
+  （`ended` 终态、`ready` 可撤回），可在活动详情页或编辑页操作
+- **抽奖演示**：每个活动一个幂等测试码（活动列表/详情的 ▶ 入口），抽奖走完整流程
+  （含签字）但不扣库存、不产生真实记录，且无视活动状态与起止时间
+- **签字确认**：线下抽奖可选开启（活动设置）；中奖后结果页手动进入必签签字板，
+  未签记录可在活动详情的记录页补签
 
 ## 提交规范
 
