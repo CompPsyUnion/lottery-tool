@@ -50,7 +50,7 @@ export async function findByActivity(
   const qb = AppDataSource.getRepository(LotteryCode)
     .createQueryBuilder('lottery_code')
     .where('lottery_code.activity_id = :activityId', { activityId })
-    // 测试码不进管理端列表（唯一查看入口是活动列表的演示 Dialog）
+    // 测试码不进管理端列表（唯一查看入口是活动列表的抽奖页面测试 Dialog）
     .andWhere('lottery_code.is_test = false')
 
   if (status) {
@@ -111,7 +111,7 @@ export function createBatch(
 }
 
 /**
- * 幂等获取（或创建）活动的演示测试码：一活动至多一个（DB 部分唯一索引
+ * 幂等获取（或创建）活动的测试抽奖码：一活动至多一个（DB 部分唯一索引
  * uq_lottery_codes_activity_is_test 兜底）。已存在且被手动置为
  * used/invalid 时复位为 unused（测试码语义 = 永远可抽）。
  * 不受 settings.max_lottery_codes 配额约束（countByActivity 已排除测试码）。

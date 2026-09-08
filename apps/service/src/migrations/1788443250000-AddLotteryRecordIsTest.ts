@@ -1,7 +1,7 @@
 import { type MigrationInterface, type QueryRunner } from 'typeorm'
 
 /**
- * lottery_records 加 is_test 标记：演示测试码抽奖也写记录（支撑签字流程演示），
+ * lottery_records 加 is_test 标记：测试抽奖码抽奖也写记录（支撑签字流程测试），
  * 但不计入统计与管理端列表；测试码每次抽奖复用同一条记录（upsert），不堆积。
  */
 export class AddLotteryRecordIsTest1788443250000 implements MigrationInterface {

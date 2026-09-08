@@ -469,7 +469,7 @@ router.post(
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes/demo
- * @desc    幂等获取（或创建）活动的演示测试码（不占 max_lottery_codes 配额）
+ * @desc    幂等获取（或创建）活动的测试抽奖码（不占 max_lottery_codes 配额）
  * @access  Private (Admin)
  */
 router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next: NextFunction) => {

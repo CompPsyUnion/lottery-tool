@@ -175,7 +175,7 @@
           </div>
 
           <p v-if="lotteryResult?.is_demo" class="text-center text-xs text-muted-foreground">
-            测试演示——未扣减奖品库存，演示记录不计入统计
+            测试抽奖——未扣减奖品库存，测试记录不计入统计
           </p>
         </div>
 
@@ -248,7 +248,7 @@ const isDrawing = ref(false)
 const showResult = ref(false)
 const lotteryResult = ref<{
   is_winner: boolean
-  /** 测试码演示抽奖：不扣库存、不写记录 */
+  /** 测试码测试抽奖：不扣库存、不写记录 */
   is_demo?: boolean
   prize?: Prize | null
   lottery_record?: LotteryRecord | null
@@ -258,7 +258,7 @@ const lotteryResult = ref<{
   } | null
 } | null>(null)
 
-// URL 携带 code 时预填抽奖码（管理端演示链接）；编程式赋值不触发输入过滤，
+// URL 携带 code 时预填抽奖码（管理端测试链接）；编程式赋值不触发输入过滤，
 // 不会破坏含小写字母的码值
 const presetCode = urlParams.get('code')
 if (presetCode) lotteryCode.value = presetCode
@@ -372,13 +372,13 @@ const loadActivityInfo = async () => {
     activityInfo.value = response.activity
     prizes.value = response.prizes || []
 
-    // 检查活动状态（URL 带 code 为管理端演示入口：测试码无视活动状态，放行并提示）
+    // 检查活动状态（URL 带 code 为管理端测试入口：测试码无视活动状态，放行并提示）
     if (activityInfo.value.status !== 'active' && !presetCode) {
       error.value = activityInfo.value.status === 'ended' ? '活动已结束' : '活动未开始'
       return
     }
     if (activityInfo.value.status !== 'active' && presetCode) {
-      toast.info('当前活动未在进行中——演示模式：测试抽奖码仍可体验抽奖流程')
+      toast.info('当前活动未在进行中——测试模式：测试抽奖码仍可体验抽奖流程')
     }
   } catch (err) {
     // 加载活动信息失败

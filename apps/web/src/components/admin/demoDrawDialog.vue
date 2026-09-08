@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 抽奖界面演示 Dialog（共用组件）：幂等获取活动测试码 + 预填链接。
+ * 抽奖页面测试 Dialog（共用组件）：幂等获取活动测试码 + 预填链接。
  * 活动列表行操作与活动详情页两个入口共用。
  */
 import { computed, ref, watch } from 'vue'
@@ -80,9 +80,9 @@ const openDemoUrl = () => {
   <Dialog :open="open" @update:open="(v: boolean) => emit('update:open', v)">
     <DialogScrollContent class="sm:max-w-lg">
       <DialogHeader>
-        <DialogTitle>抽奖界面演示</DialogTitle>
+        <DialogTitle>抽奖页面测试</DialogTitle>
         <DialogDescription>
-          使用测试抽奖码在真实抽奖页体验完整流程（含签字）：不扣减奖品库存，演示记录不计入统计，可反复抽。
+          使用测试抽奖码在真实抽奖页体验完整流程（含签字）：不扣减奖品库存，测试记录不计入统计，可反复抽。
         </DialogDescription>
       </DialogHeader>
 
@@ -137,7 +137,7 @@ const openDemoUrl = () => {
         </div>
 
         <p class="text-xs leading-relaxed text-muted-foreground">
-          提示：测试码无视活动状态与起止时间，任意阶段均可演示抽奖；线下抽奖模式需管理员登录后操作。
+          提示：测试码无视活动状态与起止时间，任意阶段均可测试抽奖；线下抽奖模式需管理员登录后操作。
         </p>
       </div>
     </DialogScrollContent>

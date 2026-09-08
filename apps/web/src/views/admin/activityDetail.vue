@@ -58,7 +58,7 @@
           <div class="flex gap-2 border-l pl-4 ml-2">
             <Button variant="outline" @click="showDemoDialog = true">
               <Play class="mr-1 h-4 w-4" />
-              抽奖界面演示
+              抽奖页面测试
             </Button>
             <Button variant="outline" @click="openLotteryPage">
               <ExternalLink class="mr-1 h-4 w-4" />
@@ -121,7 +121,7 @@
       />
     </div>
 
-    <!-- 抽奖界面演示 Dialog（共用组件） -->
+    <!-- 抽奖页面测试 Dialog（共用组件） -->
     <DemoDrawDialog v-model:open="showDemoDialog" :activity-id="activityId" />
 
     <!-- 补签 Dialog（管理面板操作，可取消） -->
@@ -287,7 +287,7 @@ const columns: TableColumn[] = [
           [h(Eye, { class: 'w-4 h-4' }), '已签'],
         )
       }
-      // 未签：线下活动的记录提供补签入口（真实/演示记录均可）
+      // 未签：线下活动的记录提供补签入口（真实/测试记录均可）
       if (activity.value?.lottery_mode === 'offline') {
         return h(
           'button',

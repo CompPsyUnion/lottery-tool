@@ -402,7 +402,7 @@ export const adminActivityApi = {
     })
   },
 
-  // 幂等获取（或创建）活动的演示测试码（不占 max_lottery_codes 配额）
+  // 幂等获取（或创建）活动的测试抽奖码（不占 max_lottery_codes 配额）
   async ensureDemoCode(id: number): Promise<{ lottery_code: { id: number; code: string } }> {
     return apiFetch(`/admin/activities/${id}/lottery-codes/demo`, {
       method: 'POST',

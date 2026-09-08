@@ -83,7 +83,7 @@ export class LotteryRecord {
   })
   signature_status!: SignatureStatus
 
-  /** 演示测试码产生的记录：不计入统计与管理端列表（测试码每次抽奖复用同一条） */
+  /** 测试抽奖码产生的记录：不计入统计与管理端列表（测试码每次抽奖复用同一条） */
   @Column({ name: 'is_test', type: 'boolean', nullable: false, default: false })
   is_test!: boolean
 

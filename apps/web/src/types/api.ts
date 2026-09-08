@@ -52,7 +52,7 @@ export interface LotteryCode {
   id: number
   code: string
   status: 'unused' | 'used'
-  /** 演示测试码（一活动至多一个，抽奖不产生副作用） */
+  /** 测试抽奖码（一活动至多一个，抽奖不产生副作用） */
   is_test?: boolean
   participant_info?: {
     name: string
@@ -266,7 +266,7 @@ export interface LotteryRecordListParams extends PaginationParams {
 // 抽奖响应类型
 export interface DrawLotteryResponse {
   is_winner: boolean
-  /** 测试码演示抽奖：不扣库存、不写记录 */
+  /** 测试码测试抽奖：不扣库存、不写记录 */
   is_demo?: boolean
   prize?: Prize
   /** demo 抽奖不产生记录，为 null */

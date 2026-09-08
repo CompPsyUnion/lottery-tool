@@ -49,7 +49,7 @@ export class LotteryCode {
   })
   status!: LotteryCodeStatus
 
-  /** 演示用测试码：抽奖走完整流程但不扣库存/不置 used/不写记录（一活动至多一个，DB 部分唯一索引保证） */
+  /** 测试专用码：抽奖走完整流程但不扣库存/不置 used/不写记录（一活动至多一个，DB 部分唯一索引保证） */
   @Column({ name: 'is_test', type: 'boolean', nullable: false, default: false })
   is_test!: boolean
 

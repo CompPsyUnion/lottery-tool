@@ -9,7 +9,7 @@
 - 🎯 **多种抽奖模式**：支持线上抽奖和线下抽奖
 - 🔄 **活动状态机**：`draft → ready → active → ended`，60 秒定时任务到点自动开始/结束（流转受矩阵约束，`PATCH /admin/activities/:id/status`）
 - 🎫 **抽奖码系统**：支持多种格式的抽奖码生成
-- 🧪 **演示测试码**：每个活动一个幂等测试码，抽奖走完整流程（含签字）但不扣库存、不产生真实记录
+- 🧪 **测试抽奖码**：每个活动一个幂等测试码，抽奖走完整流程（含签字）但不扣库存、不产生真实记录
 - ✍️ **签字确认**：线下抽奖可选签字确认（图片存库），记录页支持补签
 - 📧 **邮箱验证码**：注册验证码经 email-poster POST webhook 发送（无 SMTP），通道在超管设置页配置
 - 🔐 **权限管理**：超级管理员和普通管理员角色
@@ -158,7 +158,7 @@ curl -X PATCH http://localhost:3000/admin/activities/1/status \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{ "status": "ready" }'
 
-# 幂等获取演示测试码（每活动一个；用它抽奖不扣库存、不产生真实记录）
+# 幂等获取测试抽奖码（每活动一个；用它抽奖不扣库存、不产生真实记录）
 curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```

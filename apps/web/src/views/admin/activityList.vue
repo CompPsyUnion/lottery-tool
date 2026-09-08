@@ -66,7 +66,7 @@
       @page-change="handlePageChange"
     />
 
-    <!-- 抽奖界面演示 Dialog（共用组件） -->
+    <!-- 抽奖页面测试 Dialog（共用组件） -->
     <DemoDrawDialog v-model:open="showDemoDialog" :activity-id="demoActivityId" />
   </div>
 </template>
@@ -236,7 +236,7 @@ const columns = computed<TableColumn[]>(() => [
           {
             class:
               'inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8',
-            title: '抽奖界面演示',
+            title: '抽奖页面测试',
             onClick: () => handleDemoActivity(String(activity.id)),
           },
           [h(Play, { size: 16 })],
@@ -352,7 +352,7 @@ const handleDeleteActivity = async (id: string) => {
   }
 }
 
-// ---- 抽奖界面演示 / 打开实际抽奖页 ----
+// ---- 抽奖页面测试 / 打开实际抽奖页 ----
 const showDemoDialog = ref(false)
 const demoActivityId = ref(0)
 

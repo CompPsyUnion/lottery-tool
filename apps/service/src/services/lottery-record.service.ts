@@ -44,8 +44,8 @@ export function createRecord(
 }
 
 /**
- * 演示记录 upsert：测试码每次抽奖复用同一条 is_test 记录（不堆积），
- * 重抽时更新结果并重置签字状态（可重新演示签字）。真实码不走此函数。
+ * 测试记录 upsert：测试码每次抽奖复用同一条 is_test 记录（不堆积），
+ * 重抽时更新结果并重置签字状态（可重新测试签字）。真实码不走此函数。
  */
 export async function upsertDemoRecord(
   data: CreateRecordData,
@@ -136,7 +136,7 @@ export async function findByActivity(
     .leftJoinAndSelect('record.activity', 'activity')
     .leftJoinAndSelect('record.operator', 'operator')
     .where('record.activity_id = :activityId', { activityId })
-    // 演示记录（测试码 upsert 产物）不进管理端列表
+    // 测试记录（测试码 upsert 产物）不进管理端列表
     .andWhere('record.is_test = false')
 
   if (winner_only) {
@@ -236,7 +236,7 @@ export async function getWinningStatistics(
 
   const repo = AppDataSource.getRepository(LotteryRecord)
 
-  // 按奖品分组统计（联奖品名；排除演示记录）
+  // 按奖品分组统计（联奖品名；排除测试记录）
   const prizeStats = await repo
     .createQueryBuilder('record')
     .innerJoinAndSelect('record.prize', 'prize')
@@ -256,7 +256,7 @@ export async function getWinningStatistics(
     .addGroupBy('prize.name')
     .getRawMany()
 
-  // 按日期分组统计（MySQL fn('DATE') → PG ::date；排除演示记录）
+  // 按日期分组统计（MySQL fn('DATE') → PG ::date；排除测试记录）
   const dailyStats = await repo
     .createQueryBuilder('record')
     .where('record.activity_id = :activityId', { activityId })

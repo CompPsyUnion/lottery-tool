@@ -117,8 +117,8 @@ router.post(
           throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在或不属于此活动')
         }
 
-        // 演示测试码短路：概率照算走完整体验，但不扣库存、不置 used；
-        // 写一条 is_test 演示记录（复用不堆积）以支撑签字流程演示。
+        // 测试抽奖码短路：概率照算走完整体验，但不扣库存、不置 used；
+        // 写一条 is_test 测试记录（复用不堆积）以支撑签字流程测试。
         // 置于状态/时间/used 检查之前——测试码无视活动起止与状态，「永远可抽」
         if (lotteryCodeRecord.is_test) {
           const demoPrize = await PrizeService.selectByProbability(parseInt(activityId), activity, {
@@ -304,8 +304,8 @@ router.post(
           throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在或不属于此活动')
         }
 
-        // 演示测试码短路：同线上 draw——置于状态/时间检查之前（无视活动起止与状态），
-        // 指定 prize_id 时照常校验但不扣库存；写 is_test 演示记录（带 operator_id 可走签字）
+        // 测试抽奖码短路：同线上 draw——置于状态/时间检查之前（无视活动起止与状态），
+        // 指定 prize_id 时照常校验但不扣库存；写 is_test 测试记录（带 operator_id 可走签字）
         if (lotteryCodeRecord.is_test) {
           let demoPrize: Prize | null = null
           if (prize_id) {
