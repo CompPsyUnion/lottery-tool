@@ -12,10 +12,10 @@
 
 前端只认一个关键变量：
 
-| 变量 | 作用 | 示例 |
-| --- | --- | --- |
+| 变量                | 作用                                             | 示例                      |
+| ------------------- | ------------------------------------------------ | ------------------------- |
 | `VITE_API_BASE_URL` | 后端 API 基础地址，构建时注入（见 `src/api.ts`） | `https://api.example.com` |
-| `VITE_APP_TITLE` | 页面标题（可选） | `抽奖工具` |
+| `VITE_APP_TITLE`    | 页面标题（可选）                                 | `抽奖工具`                |
 
 优先级规则（Vite 默认行为）：
 
@@ -38,14 +38,14 @@
 
 本仓库是 pnpm monorepo，前端在 `apps/web` 子目录，按如下填写：
 
-| 配置项 | 值 | 说明 |
-| --- | --- | --- |
-| 根目录 | 仓库根目录（留空或 `/`） | 需要在根目录安装 workspace 依赖 |
-| 包管理器 | pnpm | 平台根据 `pnpm-lock.yaml` 自动识别 |
-| 安装命令 | `pnpm install --frozen-lockfile` | 默认即可 |
-| 构建命令 | `pnpm --filter @lottery-tool/web build` | 内部执行 `vue-tsc -b && vite build` |
-| 输出目录 | `apps/web/dist` | Vite 默认产物目录 |
-| Node 版本 | 20 或以上 | 与仓库 `engines` 要求一致 |
+| 配置项    | 值                                      | 说明                                |
+| --------- | --------------------------------------- | ----------------------------------- |
+| 根目录    | 仓库根目录（留空或 `/`）                | 需要在根目录安装 workspace 依赖     |
+| 包管理器  | pnpm                                    | 平台根据 `pnpm-lock.yaml` 自动识别  |
+| 安装命令  | `pnpm install --frozen-lockfile`        | 默认即可                            |
+| 构建命令  | `pnpm --filter @lottery-tool/web build` | 内部执行 `vue-tsc -b && vite build` |
+| 输出目录  | `apps/web/dist`                         | Vite 默认产物目录                   |
+| Node 版本 | 20 或以上                               | 与仓库 `engines` 要求一致           |
 
 ### 3. 配置环境变量
 
@@ -76,7 +76,7 @@ VITE_APP_TITLE=抽奖工具
 
 ```json
 {
-  "rewrites": [{ "source": "/*", "destination": "/index.html" }]
+   "rewrites": [{ "source": "/*", "destination": "/index.html" }]
 }
 ```
 
@@ -104,13 +104,13 @@ CORS_ORIGIN=https://your-frontend-domain.edgeone.app
 
 ## 常见问题
 
-| 现象 | 原因与处理 |
-| --- | --- |
-| 请求仍指向 `localhost:3000` | 环境变量未注入构建：确认在 EdgeOne 配置后**重新部署**；`VITE_` 前缀不可省略 |
+| 现象                               | 原因与处理                                                                                    |
+| ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| 请求仍指向 `localhost:3000`        | 环境变量未注入构建：确认在 EdgeOne 配置后**重新部署**；`VITE_` 前缀不可省略                   |
 | 本地 `pnpm build` 的产物指向旧地址 | 本地构建读取 `apps/web/.env.production`，改该文件或用 `VITE_API_BASE_URL=... pnpm build` 覆盖 |
-| 接口 CORS 报错 | 后端 `CORS_ORIGIN` 未包含前端域名 |
-| 刷新子路径 404 | SPA 回退未生效，见上节 |
-| 构建时类型检查失败 | `vue-tsc` 全量类型检查，先本地 `pnpm --filter @lottery-tool/web build` 复现修复 |
+| 接口 CORS 报错                     | 后端 `CORS_ORIGIN` 未包含前端域名                                                             |
+| 刷新子路径 404                     | SPA 回退未生效，见上节                                                                        |
+| 构建时类型检查失败                 | `vue-tsc` 全量类型检查，先本地 `pnpm --filter @lottery-tool/web build` 复现修复               |
 
 ## 本地验证环境变量注入
 

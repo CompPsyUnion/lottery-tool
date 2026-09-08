@@ -60,9 +60,7 @@ try {
     ...downQueries.filter((q) => /DROP CONSTRAINT/i.test(q.query)),
     ...downQueries.filter((q) => /DROP INDEX/i.test(q.query)),
     ...downQueries.filter((q) => /DROP TABLE/i.test(q.query)),
-    ...downQueries.filter(
-      (q) => !/DROP CONSTRAINT|DROP INDEX|DROP TABLE/i.test(q.query),
-    ),
+    ...downQueries.filter((q) => !/DROP CONSTRAINT|DROP INDEX|DROP TABLE/i.test(q.query)),
   ]
 
   const render = (queries: { query: string }[]): string =>

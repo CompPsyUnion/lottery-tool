@@ -4,7 +4,7 @@
 
 - 镜像地址：`ghcr.io/comppsyunion/lottery-tool-service`（**public**，无需登录即可拉取）
 - 触发构建：push 到 main 分支且改动涉及后端（`apps/service/**`、依赖清单、Dockerfile 等）
-- 标签约定：`latest`（默认分支最新）与 `main-<短sha>`（对应触发提交，可精确锁定/回滚）
+- 标签约定：主分支 `latest`（最新）与 `main-<短sha>`；其他分支 `develop` 与 `develop-<短sha>`（均可精确锁定/回滚）
 
 ## 一、最快部署（Compose 一键起）
 
@@ -34,19 +34,19 @@ docker compose logs -f lottery-backend
 
 完整模板见 [`apps/service/.env.example`](../apps/service/.env.example)（本地开发与 Docker 部署共用），全部可选——未设置时使用 compose 内置默认值：
 
-| 变量 | 建议必改 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` | ✓ | `lottery` / `lottery` | 数据库账号（postgres 初始化 + 后端连接共用） |
-| `POSTGRES_DB` | | `lottery_system` | 数据库名 |
-| `POSTGRES_PORT` | | `5432` | postgres 对宿主机暴露的端口（默认**不暴露**，仅 docker 内网；需外部连库时在 compose 中取消 ports 注释） |
-| `DB_HOST` | | `postgres` | 外部数据库时改为实际地址（见第三节） |
-| `JWT_SECRET` | ✓ | 占位值 | JWT 签名密钥（`openssl rand -hex 32`） |
-| `JWT_EXPIRES_IN` | | `24h` | |
-| `BACKEND_PORT` | | `3000` | 后端对宿主机暴露的端口 |
-| `BACKEND_IMAGE` | | `...:latest` | 镜像及版本锁定（见第四节） |
-| `CORS_ORIGIN` | | `*` | 前端域名，多域名逗号分隔 |
-| `SUPER_ADMIN_USERNAME` / `SUPER_ADMIN_PASSWORD` | 可选 | 空 | 两者同时设置且用户表为空时，启动自动创建超管（见下） |
-| `SUPER_ADMIN_EMAIL` | 可选 | 空 | 超管邮箱 |
+| 变量                                            | 建议必改 | 默认值                | 说明                                                                                                    |
+| ----------------------------------------------- | -------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD`           | ✓        | `lottery` / `lottery` | 数据库账号（postgres 初始化 + 后端连接共用）                                                            |
+| `POSTGRES_DB`                                   |          | `lottery_system`      | 数据库名                                                                                                |
+| `POSTGRES_PORT`                                 |          | `5432`                | postgres 对宿主机暴露的端口（默认**不暴露**，仅 docker 内网；需外部连库时在 compose 中取消 ports 注释） |
+| `DB_HOST`                                       |          | `postgres`            | 外部数据库时改为实际地址（见第三节）                                                                    |
+| `JWT_SECRET`                                    | ✓        | 占位值                | JWT 签名密钥（`openssl rand -hex 32`）                                                                  |
+| `JWT_EXPIRES_IN`                                |          | `24h`                 |                                                                                                         |
+| `BACKEND_PORT`                                  |          | `3000`                | 后端对宿主机暴露的端口                                                                                  |
+| `BACKEND_IMAGE`                                 |          | `...:latest`          | 镜像及版本锁定（见第四节）                                                                              |
+| `CORS_ORIGIN`                                   |          | `*`                   | 前端域名，多域名逗号分隔                                                                                |
+| `SUPER_ADMIN_USERNAME` / `SUPER_ADMIN_PASSWORD` | 可选     | 空                    | 两者同时设置且用户表为空时，启动自动创建超管（见下）                                                    |
+| `SUPER_ADMIN_EMAIL`                             | 可选     | 空                    | 超管邮箱                                                                                                |
 
 ### 超级管理员引导（二选一）
 
@@ -92,12 +92,12 @@ docker compose up -d lottery-backend
 
 ## 五、常见问题
 
-| 现象 | 处理 |
-| --- | --- |
-| 启动日志 `数据库连接失败，但应用将继续启动` | `DOCKER_ENV` 模式下不退出，等数据库就绪后重启容器：`docker compose restart lottery-backend` |
-| 前端跨域报错 | `CORS_ORIGIN` 设为前端完整域名 |
-| 拉镜像 401 | 本镜像为 public 无需登录；若你用的是 fork 私有镜像，先 `docker login ghcr.io`（用户名 + PAT with read:packages） |
-| 忘记超管密码 | 用户表清空后重新引导，或用另一个超管在系统设置中重置 |
+| 现象                                        | 处理                                                                                                             |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| 启动日志 `数据库连接失败，但应用将继续启动` | `DOCKER_ENV` 模式下不退出，等数据库就绪后重启容器：`docker compose restart lottery-backend`                      |
+| 前端跨域报错                                | `CORS_ORIGIN` 设为前端完整域名                                                                                   |
+| 拉镜像 401                                  | 本镜像为 public 无需登录；若你用的是 fork 私有镜像，先 `docker login ghcr.io`（用户名 + PAT with read:packages） |
+| 忘记超管密码                                | 用户表清空后重新引导，或用另一个超管在系统设置中重置                                                             |
 
 ## 相关文档
 

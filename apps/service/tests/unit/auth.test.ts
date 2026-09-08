@@ -1,22 +1,22 @@
-import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken'
 
 // 模拟请求/响应/next的宽松类型
-type MockHandler = (req: any, res: any, next: any) => void;
+type MockHandler = (req: any, res: any, next: any) => void
 
 // 模拟认证中间件
 const auth = {
   authenticateToken: ((req, res, next) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.headers.authorization
+    const token = authHeader && authHeader.split(' ')[1]
 
     if (!token) {
       return res.status(401).json({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌缺失'
-        }
-      });
+          message: '访问令牌缺失',
+        },
+      })
     }
 
     if (!authHeader.startsWith('Bearer ')) {
@@ -24,9 +24,9 @@ const auth = {
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌格式错误'
-        }
-      });
+          message: '访问令牌格式错误',
+        },
+      })
     }
 
     jwt.verify(token, process.env.JWT_SECRET || 'test-secret-key', (err, user) => {
@@ -35,14 +35,14 @@ const auth = {
           success: false,
           error: {
             code: 'AUTH_002',
-            message: err.name === 'TokenExpiredError' ? '访问令牌已过期' : '访问令牌无效'
-          }
-        });
+            message: err.name === 'TokenExpiredError' ? '访问令牌已过期' : '访问令牌无效',
+          },
+        })
       }
 
-      req.user = user;
-      next();
-    });
+      req.user = user
+      next()
+    })
   }) as MockHandler,
 
   requireAuth: ((req, res, next) => {
@@ -51,11 +51,11 @@ const auth = {
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '需要登录'
-        }
-      });
+          message: '需要登录',
+        },
+      })
     }
-    next();
+    next()
   }) as MockHandler,
 
   requireRole: (roles: string | string[]): MockHandler => {
@@ -65,26 +65,26 @@ const auth = {
           success: false,
           error: {
             code: 'AUTH_002',
-            message: '需要登录'
-          }
-        });
+            message: '需要登录',
+          },
+        })
       }
 
-      const userRole = req.user.role;
-      const allowedRoles = Array.isArray(roles) ? roles : [roles];
+      const userRole = req.user.role
+      const allowedRoles = Array.isArray(roles) ? roles : [roles]
 
       if (!allowedRoles.includes(userRole)) {
         return res.status(403).json({
           success: false,
           error: {
             code: 'AUTH_003',
-            message: '权限不足'
-          }
-        });
+            message: '权限不足',
+          },
+        })
       }
 
-      next();
-    };
+      next()
+    }
   },
 
   requireSuperAdmin: ((req, res, next) => {
@@ -93,9 +93,9 @@ const auth = {
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '需要登录'
-        }
-      });
+          message: '需要登录',
+        },
+      })
     }
 
     if (req.user.role !== 'super_admin') {
@@ -103,321 +103,317 @@ const auth = {
         success: false,
         error: {
           code: 'AUTH_003',
-          message: '需要超级管理员权限'
-        }
-      });
+          message: '需要超级管理员权限',
+        },
+      })
     }
 
-    next();
+    next()
   }) as MockHandler,
 
   optionalAuth: ((req, res, next) => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    const authHeader = req.headers.authorization
+    const token = authHeader && authHeader.split(' ')[1]
 
     if (token && authHeader.startsWith('Bearer ')) {
       jwt.verify(token, process.env.JWT_SECRET || 'test-secret-key', (err, user) => {
         if (!err) {
-          req.user = user;
+          req.user = user
         }
-        next();
-      });
+        next()
+      })
     } else {
-      next();
+      next()
     }
-  }) as MockHandler
-};
+  }) as MockHandler,
+}
 
 // 模拟Express请求和响应对象
 const createMockRequest = (headers: Record<string, string> = {}, user: any = null) => ({
   headers,
   user,
-  get: (name: string) => headers[name]
-});
+  get: (name: string) => headers[name],
+})
 
 const createMockResponse = () => {
-  const res: any = {};
-  res.status = jest.fn().mockReturnValue(res);
-  res.json = jest.fn().mockReturnValue(res);
-  return res;
-};
+  const res: any = {}
+  res.status = jest.fn().mockReturnValue(res)
+  res.json = jest.fn().mockReturnValue(res)
+  return res
+}
 
-const createMockNext = () => jest.fn();
+const createMockNext = () => jest.fn()
 
 describe('认证中间件单元测试', () => {
-  let validToken: string;
-  let expiredToken: string;
-  let invalidToken: string;
+  let validToken: string
+  let expiredToken: string
+  let invalidToken: string
 
   beforeAll(() => {
     // 生成有效token
-    validToken = jwt.sign(
-      { id: 1, role: 'admin' },
-      process.env.JWT_SECRET || 'test-secret-key',
-      { expiresIn: '1h' }
-    );
+    validToken = jwt.sign({ id: 1, role: 'admin' }, process.env.JWT_SECRET || 'test-secret-key', {
+      expiresIn: '1h',
+    })
 
     // 生成过期token
-    expiredToken = jwt.sign(
-      { id: 1, role: 'admin' },
-      process.env.JWT_SECRET || 'test-secret-key',
-      { expiresIn: '0s' }
-    );
+    expiredToken = jwt.sign({ id: 1, role: 'admin' }, process.env.JWT_SECRET || 'test-secret-key', {
+      expiresIn: '0s',
+    })
 
     // 无效token
-    invalidToken = 'invalid.token.here';
-  });
+    invalidToken = 'invalid.token.here'
+  })
 
   describe('authenticateToken', () => {
     it('应该验证有效的JWT token', () => {
       const req = createMockRequest({
-        'authorization': `Bearer ${validToken}`
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: `Bearer ${validToken}`,
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.authenticateToken(req, res, next);
+      auth.authenticateToken(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-      expect(req.user).toBeDefined();
-      expect(req.user.id).toBe(1);
-      expect(req.user.role).toBe('admin');
-    });
+      expect(next).toHaveBeenCalled()
+      expect(req.user).toBeDefined()
+      expect(req.user.id).toBe(1)
+      expect(req.user.role).toBe('admin')
+    })
 
     it('应该处理缺少Authorization头的请求', () => {
-      const req = createMockRequest({});
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({})
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.authenticateToken(req, res, next);
+      auth.authenticateToken(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌缺失'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
+          message: '访问令牌缺失',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
 
     it('应该处理无效的token格式', () => {
       const req = createMockRequest({
-        'authorization': 'InvalidFormat token123'
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: 'InvalidFormat token123',
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.authenticateToken(req, res, next);
+      auth.authenticateToken(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌格式错误'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
+          message: '访问令牌格式错误',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
 
     it('应该处理无效的JWT token', () => {
       const req = createMockRequest({
-        'authorization': `Bearer ${invalidToken}`
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: `Bearer ${invalidToken}`,
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.authenticateToken(req, res, next);
+      auth.authenticateToken(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌无效'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
+          message: '访问令牌无效',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
 
     it('应该处理过期的JWT token', () => {
       const req = createMockRequest({
-        'authorization': `Bearer ${expiredToken}`
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: `Bearer ${expiredToken}`,
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.authenticateToken(req, res, next);
+      auth.authenticateToken(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '访问令牌已过期'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
-  });
+          message: '访问令牌已过期',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
+  })
 
   describe('requireAuth', () => {
     it('应该允许已认证的请求通过', () => {
-      const req = createMockRequest({}, { id: 1, role: 'admin' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'admin' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireAuth(req, res, next);
+      auth.requireAuth(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-    });
+      expect(next).toHaveBeenCalled()
+    })
 
     it('应该拒绝未认证的请求', () => {
-      const req = createMockRequest({});
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({})
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireAuth(req, res, next);
+      auth.requireAuth(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '需要登录'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
-  });
+          message: '需要登录',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
+  })
 
   describe('requireRole', () => {
     it('应该允许具有正确角色的用户访问', () => {
-      const req = createMockRequest({}, { id: 1, role: 'admin' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'admin' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireRole(['admin', 'super_admin'])(req, res, next);
+      auth.requireRole(['admin', 'super_admin'])(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-    });
+      expect(next).toHaveBeenCalled()
+    })
 
     it('应该拒绝权限不足的用户', () => {
-      const req = createMockRequest({}, { id: 1, role: 'participant' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'participant' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireRole(['admin', 'super_admin'])(req, res, next);
+      auth.requireRole(['admin', 'super_admin'])(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.status).toHaveBeenCalledWith(403)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_003',
-          message: '权限不足'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
+          message: '权限不足',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
 
     it('应该处理未认证的请求', () => {
-      const req = createMockRequest({});
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({})
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireRole(['admin'])(req, res, next);
+      auth.requireRole(['admin'])(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(401);
+      expect(res.status).toHaveBeenCalledWith(401)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_002',
-          message: '需要登录'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
+          message: '需要登录',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
 
     it('应该支持单个角色参数', () => {
-      const req = createMockRequest({}, { id: 1, role: 'admin' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'admin' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireRole('admin')(req, res, next);
+      auth.requireRole('admin')(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-    });
-  });
+      expect(next).toHaveBeenCalled()
+    })
+  })
 
   describe('requireSuperAdmin', () => {
     it('应该允许超级管理员访问', () => {
-      const req = createMockRequest({}, { id: 1, role: 'super_admin' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'super_admin' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireSuperAdmin(req, res, next);
+      auth.requireSuperAdmin(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-    });
+      expect(next).toHaveBeenCalled()
+    })
 
     it('应该拒绝普通管理员访问', () => {
-      const req = createMockRequest({}, { id: 1, role: 'admin' });
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({}, { id: 1, role: 'admin' })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.requireSuperAdmin(req, res, next);
+      auth.requireSuperAdmin(req, res, next)
 
-      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.status).toHaveBeenCalledWith(403)
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: {
           code: 'AUTH_003',
-          message: '需要超级管理员权限'
-        }
-      });
-      expect(next).not.toHaveBeenCalled();
-    });
-  });
+          message: '需要超级管理员权限',
+        },
+      })
+      expect(next).not.toHaveBeenCalled()
+    })
+  })
 
   describe('optionalAuth', () => {
     it('应该允许有token的请求通过并设置用户信息', () => {
       const req = createMockRequest({
-        'authorization': `Bearer ${validToken}`
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: `Bearer ${validToken}`,
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.optionalAuth(req, res, next);
+      auth.optionalAuth(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-      expect(req.user).toBeDefined();
-      expect(req.user.id).toBe(1);
-    });
+      expect(next).toHaveBeenCalled()
+      expect(req.user).toBeDefined()
+      expect(req.user.id).toBe(1)
+    })
 
     it('应该允许没有token的请求通过但不设置用户信息', () => {
-      const req = createMockRequest({});
-      const res = createMockResponse();
-      const next = createMockNext();
+      const req = createMockRequest({})
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.optionalAuth(req, res, next);
+      auth.optionalAuth(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-      expect(req.user).toBeNull();
-    });
+      expect(next).toHaveBeenCalled()
+      expect(req.user).toBeNull()
+    })
 
     it('应该处理无效token但不阻止请求', () => {
       const req = createMockRequest({
-        'authorization': 'Bearer invalid.token'
-      });
-      const res = createMockResponse();
-      const next = createMockNext();
+        authorization: 'Bearer invalid.token',
+      })
+      const res = createMockResponse()
+      const next = createMockNext()
 
-      auth.optionalAuth(req, res, next);
+      auth.optionalAuth(req, res, next)
 
-      expect(next).toHaveBeenCalled();
-      expect(req.user).toBeNull();
-    });
-  });
-});
+      expect(next).toHaveBeenCalled()
+      expect(req.user).toBeNull()
+    })
+  })
+})

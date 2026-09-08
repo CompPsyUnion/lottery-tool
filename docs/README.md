@@ -2,10 +2,10 @@
 
 独立文档统一存放于此目录；各包与子目录的自述文件（`README.md`）保持在各自位置。
 
-| 文档 | 说明 |
-| --- | --- |
+| 文档                                     | 说明                                                    |
+| ---------------------------------------- | ------------------------------------------------------- |
 | [DEPLOY_EDGEONE.md](./DEPLOY_EDGEONE.md) | 前端部署至腾讯云 EdgeOne Pages（环境变量配置 API 地址） |
-| [DEPLOY_BACKEND.md](./DEPLOY_BACKEND.md) | 后端部署（GHCR 镜像 + Docker Compose） |
+| [DEPLOY_BACKEND.md](./DEPLOY_BACKEND.md) | 后端部署（GHCR 镜像 + Docker Compose）                  |
 
 ## 各包自述
 

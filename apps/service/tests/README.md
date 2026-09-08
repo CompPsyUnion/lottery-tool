@@ -11,9 +11,9 @@ tests/
 ├── setup.ts                        # Jest 全局设置（环境变量）
 ├── unit/
 │   ├── auth.test.ts               # 认证中间件单元测试（内置 mock，无依赖）
-│   └── lotteryCodeGenerator.test.ts # 抽奖码生成器单元测试
+│   └── lottery-code-generator.test.ts # 抽奖码生成器单元测试
 └── utils/
-    └── lotteryCodeGenerator.test.ts # 抽奖码生成器测试（含重试机制用例）
+    └── lottery-code-generator.test.ts # 抽奖码生成器测试（含重试机制用例）
 ```
 
 ## 运行测试

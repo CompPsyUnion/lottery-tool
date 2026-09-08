@@ -1,4 +1,4 @@
-import type { RouteRecordRaw } from 'vue-router';
+import type { RouteRecordRaw } from 'vue-router'
 
 // 管理员路由配置
 const adminRoutes: RouteRecordRaw[] = [
@@ -97,6 +97,14 @@ const adminRoutes: RouteRecordRaw[] = [
         ],
       },
       {
+        path: 'super-settings',
+        name: 'Super Settings',
+        component: () => import('../views/admin/superSettings.vue'),
+        meta: {
+          title: 'Super Settings',
+        },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/admin/settings.vue'),
@@ -106,6 +114,6 @@ const adminRoutes: RouteRecordRaw[] = [
       },
     ],
   },
-];
+]
 
-export default adminRoutes;
+export default adminRoutes

@@ -1,4 +1,5 @@
 {
+  "eslint.workingDirectories": [{ "mode": "auto" }],
   "cSpell": {
     "words": [
       "backurl",
@@ -38,6 +39,8 @@
       "newuser",
       "njsproj",
       "normaluser",
+      "oklch",
+      "preheader",
       "ntvs",
       "Nuxt",
       "officedocument",
@@ -48,6 +51,7 @@
       "Pgsql",
       "pids",
       "reka",
+      "smtogo",
       "sonner",
       "spreadsheetml",
       "SQLSTATE",

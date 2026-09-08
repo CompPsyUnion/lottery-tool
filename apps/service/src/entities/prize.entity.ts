@@ -7,8 +7,8 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-} from 'typeorm';
-import { Activity } from './activity.entity';
+} from 'typeorm'
+import { Activity } from './activity.entity'
 
 @Entity({ name: 'prizes' })
 @Index('idx_prizes_activity', ['activity_id'])
@@ -17,26 +17,26 @@ export class Prize {
     type: 'integer',
     primaryKeyConstraintName: 'pk_prizes',
   })
-  id!: number;
+  id!: number
 
   @Column({ name: 'activity_id', type: 'integer', nullable: false })
-  activity_id!: number;
+  activity_id!: number
 
   @ManyToOne(() => Activity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'activity_id', foreignKeyConstraintName: 'fk_prizes_activity' })
-  activity!: Activity;
+  activity!: Activity
 
   @Column({ name: 'name', type: 'varchar', length: 100, nullable: false })
-  name!: string;
+  name!: string
 
   @Column({ name: 'description', type: 'text', nullable: true })
-  description!: string | null;
+  description!: string | null
 
   @Column({ name: 'total_quantity', type: 'integer', nullable: false, default: 0 })
-  total_quantity!: number;
+  total_quantity!: number
 
   @Column({ name: 'remaining_quantity', type: 'integer', nullable: false, default: 0 })
-  remaining_quantity!: number;
+  remaining_quantity!: number
 
   /** numeric 经 pg 驱动返回字符串，业务层 parseFloat */
   @Column({
@@ -47,14 +47,14 @@ export class Prize {
     nullable: false,
     default: 0,
   })
-  probability!: string;
+  probability!: string
 
   @Column({ name: 'sort_order', type: 'integer', nullable: true, default: 0 })
-  sort_order!: number | null;
+  sort_order!: number | null
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
-  created_at!: Date;
+  created_at!: Date
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
-  updated_at!: Date;
+  updated_at!: Date
 }

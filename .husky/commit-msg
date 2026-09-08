@@ -1,2 +1,40 @@
-# 实体改动必须伴随已注册的新迁移（含 "bypass migration check" 的提交信息可跳过）
-pnpm --filter @lottery-tool/service run --silent migration:check "$1"
+#!/bin/sh
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Allow merge commits without validation
+if echo "$commit_msg" | grep -qE "^Merge"; then
+	exit 0
+fi
+
+# Check compliance with conventional commits: type: message
+valid_types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+if ! echo "$commit_msg" | grep -qE "^($valid_types): .+"; then
+	echo "Commit message does not follow the convention!"
+	echo ""
+	echo "It must use one of the following formats:"
+	echo "  feat: new feature"
+	echo "  fix: bug fix"
+	echo "  docs: documentation update"
+	echo "  style: code formatting"
+	echo "  refactor: code refactoring"
+	echo "  perf: performance improvement"
+	echo "  test: test related"
+	echo "  build: build system"
+	echo "  ci: CI/CD configuration"
+	echo "  chore: miscellaneous"
+	echo "  revert: revert a commit"
+	echo ""
+	echo "Or a merge commit starting with \"Merge\""
+	echo ""
+	echo "Current commit message:"
+	echo "  $commit_msg"
+	exit 1
+fi
+
+# Entity changes must ship with a new, REGISTERED migration.
+# Bypass: include "bypass migration check" in the commit message.
+pnpm --filter @lottery-tool/service run --silent migration:check "$commit_msg_file"
+
+exit 0

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h } from 'vue';
+import { computed, h } from 'vue'
 import {
   Table,
   TableBody,
@@ -8,7 +8,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from '@/components/ui/table'
 import {
   Pagination,
   PaginationContent,
@@ -18,53 +18,53 @@ import {
   PaginationLast,
   PaginationNext,
   PaginationPrevious,
-} from '@/components/ui/pagination';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { DataTableProps, DataTableEmits, TableColumn } from './types';
+} from '@/components/ui/pagination'
+import { Skeleton } from '@/components/ui/skeleton'
+import type { DataTableProps, DataTableEmits, TableColumn } from './types'
 
 const props = withDefaults(defineProps<DataTableProps>(), {
   loading: false,
   emptyText: '暂无数据',
   showPagination: true,
-});
+})
 
-const emits = defineEmits<DataTableEmits>();
+const emits = defineEmits<DataTableEmits>()
 
 // 计算总页数
 const totalPages = computed(() => {
-  if (!props.pagination) return 0;
-  return Math.ceil(props.pagination.total / props.pagination.pageSize);
-});
+  if (!props.pagination) return 0
+  return Math.ceil(props.pagination.total / props.pagination.pageSize)
+})
 
 // 处理页码变化
 const handlePageChange = (page: number) => {
-  emits('page-change', page);
-};
+  emits('page-change', page)
+}
 
 // 获取单元格对齐样式
 const getCellAlignClass = (align?: string) => {
   switch (align) {
-  case 'center':
-    return 'text-center';
-  case 'right':
-    return 'text-right';
-  default:
-    return 'text-left';
+    case 'center':
+      return 'text-center'
+    case 'right':
+      return 'text-right'
+    default:
+      return 'text-left'
   }
-};
+}
 
 // 渲染单元格内容
 const renderCellContent = (column: TableColumn, record: Record<string, unknown>, index: number) => {
   if (column.render) {
-    const result = column.render(record[column.key], record, index);
+    const result = column.render(record[column.key], record, index)
     // 如果返回的是字符串且包含HTML，创建一个div元素
     if (typeof result === 'string' && result.includes('<')) {
-      return h('div', { innerHTML: result });
+      return h('div', { innerHTML: result })
     }
-    return result;
+    return result
   }
-  return record[column.key];
-};
+  return record[column.key]
+}
 </script>
 
 <template>
@@ -78,10 +78,7 @@ const renderCellContent = (column: TableColumn, record: Record<string, unknown>,
             <TableHead
               v-for="column in columns"
               :key="column.key"
-              :class="[
-                getCellAlignClass(column.align),
-                column.width ? `w-[${column.width}]` : ''
-              ]"
+              :class="[getCellAlignClass(column.align), column.width ? `w-[${column.width}]` : '']"
             >
               {{ column.title }}
             </TableHead>
@@ -139,10 +136,16 @@ const renderCellContent = (column: TableColumn, record: Record<string, unknown>,
               >
                 <component
                   :is="renderCellContent(column, record, index)"
-                  v-if="column.render && typeof renderCellContent(column, record, index) !== 'string'"
+                  v-if="
+                    column.render && typeof renderCellContent(column, record, index) !== 'string'
+                  "
                 />
                 <span v-else>
-                  {{ typeof renderCellContent(column, record, index) === 'string' ? renderCellContent(column, record, index) : record[column.key] }}
+                  {{
+                    typeof renderCellContent(column, record, index) === 'string'
+                      ? renderCellContent(column, record, index)
+                      : record[column.key]
+                  }}
                 </span>
               </TableCell>
             </TableRow>
@@ -194,12 +197,8 @@ const renderCellContent = (column: TableColumn, record: Record<string, unknown>,
       v-if="showPagination && pagination"
       class="flex items-center justify-between text-sm text-muted-foreground px-2"
     >
-      <div>
-        共 {{ pagination.total }} 条记录
-      </div>
-      <div v-if="totalPages > 1">
-        第 {{ pagination.current }} 页，共 {{ totalPages }} 页
-      </div>
+      <div>共 {{ pagination.total }} 条记录</div>
+      <div v-if="totalPages > 1">第 {{ pagination.current }} 页，共 {{ totalPages }} 页</div>
     </div>
   </div>
 </template>

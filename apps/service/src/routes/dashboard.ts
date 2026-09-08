@@ -1,17 +1,17 @@
-import express, { Request, Response, NextFunction } from 'express';
-import { In } from 'typeorm';
-import { authenticateToken, requireAdmin } from '../middleware/auth';
-import { AppDataSource } from '../utils/database';
-import { User } from '../entities/user.entity';
-import { Activity } from '../entities/activity.entity';
-import { LotteryCode } from '../entities/lottery-code.entity';
-import { LotteryRecord } from '../entities/lottery-record.entity';
+import express, { Request, Response, NextFunction } from 'express'
+import { In } from 'typeorm'
+import { authenticateToken, requireAdmin } from '../middleware/auth'
+import { AppDataSource } from '../utils/database'
+import { User } from '../entities/user.entity'
+import { Activity } from '../entities/activity.entity'
+import { LotteryCode } from '../entities/lottery-code.entity'
+import { LotteryRecord } from '../entities/lottery-record.entity'
 
-const router = express.Router();
+const router = express.Router()
 
 // 所有dashboard路由都需要认证和管理员权限
-router.use(authenticateToken);
-router.use(requireAdmin);
+router.use(authenticateToken)
+router.use(requireAdmin)
 
 /**
  * @route   GET /api/dashboard
@@ -20,26 +20,27 @@ router.use(requireAdmin);
  */
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = (req as any).user;
-    let dashboardData: Record<string, unknown> = {};
+    const user = (req as any).user
+    let dashboardData: Record<string, unknown> = {}
 
     if (user.role === 'super_admin') {
       // 超级管理员：返回系统中活动总数、抽奖码总数、管理员总数、抽奖记录总数
-      const [totalActivities, totalLotteryCodes, totalAdmins, totalLotteryRecords] = await Promise.all([
-        AppDataSource.getRepository(Activity).count(),
-        AppDataSource.getRepository(LotteryCode).count(),
-        AppDataSource.getRepository(User).count({
-          where: { role: In(['admin', 'super_admin']) },
-        }),
-        AppDataSource.getRepository(LotteryRecord).count(),
-      ]);
+      const [totalActivities, totalLotteryCodes, totalAdmins, totalLotteryRecords] =
+        await Promise.all([
+          AppDataSource.getRepository(Activity).count(),
+          AppDataSource.getRepository(LotteryCode).count({ where: { is_test: false } }),
+          AppDataSource.getRepository(User).count({
+            where: { role: In(['admin', 'super_admin']) },
+          }),
+          AppDataSource.getRepository(LotteryRecord).count({ where: { is_test: false } }),
+        ])
 
       dashboardData = {
         totalActivities,
         totalLotteryCodes,
         totalAdmins,
-        totalLotteryRecords
-      };
+        totalLotteryRecords,
+      }
     } else {
       // 管理员：返回此用户创建的活动总数、抽奖码总数、抽奖记录总数、和系统中用户总数
       const [userActivities, userLotteryCodes, userLotteryRecords, totalUsers] = await Promise.all([
@@ -55,24 +56,24 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
           .where('activity.created_by = :userId', { userId: user.id })
           .getCount(),
         AppDataSource.getRepository(User).count(),
-      ]);
+      ])
 
       dashboardData = {
         userActivities,
         userLotteryCodes,
         userLotteryRecords,
-        totalUsers
-      };
+        totalUsers,
+      }
     }
 
     res.json({
       success: true,
       data: dashboardData,
-      message: '仪表盘数据获取成功'
-    });
+      message: '仪表盘数据获取成功',
+    })
   } catch (error) {
-    next(error);
+    next(error)
   }
-});
+})
 
-export default router;
+export default router
