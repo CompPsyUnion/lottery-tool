@@ -76,3 +76,29 @@ export async function renderTestMail(): Promise<string> {
     siteTheme(),
   )
 }
+
+/** 金山表单报名成功通知（替代原 Power Automate 通道；card 模板） */
+export async function renderKdocsNotifyMail(
+  activityName: string,
+  code: string,
+  participantName: string,
+): Promise<string> {
+  const { renderCardEmail } = await templateModule
+  const escapeHtml = (text: string): string =>
+    text.replace(
+      /[&<>"']/g,
+      (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
+    )
+  return renderCardEmail(
+    {
+      title: '报名成功',
+      bodyHtml:
+        `<p>${escapeHtml(participantName)}，您好：</p>` +
+        `<p>您在「${escapeHtml(activityName)}」的报名已确认，抽奖码已生成。</p>` +
+        `<p>您的抽奖码：<strong>${escapeHtml(code)}</strong></p>` +
+        '<p>活动开始后凭此抽奖码参与抽奖，请妥善保存。</p>',
+      preheader: '报名成功，您的抽奖码已生成，请查收',
+    },
+    siteTheme(),
+  )
+}

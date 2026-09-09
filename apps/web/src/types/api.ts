@@ -11,6 +11,41 @@ export interface User {
 
 export type ActivityStatus = 'draft' | 'ready' | 'active' | 'ended'
 
+/** 金山表单（KDocs）字段映射：表单题目 qid → 抽奖字段（未配置用系统默认） */
+export interface KdocsFieldMap {
+  name?: string
+  student_id?: string
+  email?: string
+  phone?: string
+}
+
+/** 活动设置（settings jsonb） */
+export interface ActivitySettings {
+  max_lottery_codes?: number
+  lottery_code_format?:
+    | '4_digit_number'
+    | '8_digit_number'
+    | '8_digit_alphanumeric'
+    | '12_digit_number'
+    | '12_digit_alphanumeric'
+  allow_duplicate_phone?: boolean
+  require_signature?: boolean
+  /** 金山表单接入（可选）：字段 qid 映射 / 回显绑定码 / 报名成功邮件通知 */
+  kdocs_field_map?: KdocsFieldMap
+  kdocs_bind_code?: string
+  kdocs_notify?: boolean
+}
+
+/** 活动 Webhook 接入信息（GET /admin/activities/:id/webhook-info） */
+export interface ActivityWebhookInfo {
+  /** 批量添加抽奖码端点（请求头 Authorization: Bearer <token>） */
+  webhook_url: string
+  /** 金山表单端点（token 已拼在查询参数，可直接粘贴到表单 webhook 配置） */
+  kdocs_url: string
+  webhook_token: string
+  activity_id: string
+}
+
 export interface Activity {
   id: number
   name: string
@@ -20,17 +55,7 @@ export interface Activity {
   lottery_mode: 'offline' | 'online'
   start_time?: string
   end_time?: string
-  settings?: {
-    max_lottery_codes?: number
-    lottery_code_format?:
-      | '4_digit_number'
-      | '8_digit_number'
-      | '8_digit_alphanumeric'
-      | '12_digit_number'
-      | '12_digit_alphanumeric'
-    allow_duplicate_phone?: boolean
-    require_signature?: boolean
-  }
+  settings?: ActivitySettings
   created_at: string
   lottery_codes_count?: number
   remaining_lottery_codes?: number
@@ -163,17 +188,7 @@ export interface CreateActivityRequest {
   lottery_mode: 'offline' | 'online'
   start_time?: string
   end_time?: string
-  settings?: {
-    max_lottery_codes?: number
-    lottery_code_format?:
-      | '4_digit_number'
-      | '8_digit_number'
-      | '8_digit_alphanumeric'
-      | '12_digit_number'
-      | '12_digit_alphanumeric'
-    allow_duplicate_phone?: boolean
-    require_signature?: boolean
-  }
+  settings?: ActivitySettings
 }
 
 export interface UpdateActivityRequest {
@@ -181,6 +196,8 @@ export interface UpdateActivityRequest {
   description?: string
   start_time?: string
   end_time?: string
+  /** 键级合并：仅覆盖出现的键，未出现的保留库中现值 */
+  settings?: Partial<ActivitySettings>
 }
 
 /** 状态流转走专用端点 PATCH /admin/activities/:id/status（受流转矩阵约束） */

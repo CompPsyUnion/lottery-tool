@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
 import { initDataSource, AppDataSource } from './utils/database'
+import { redactUrlToken } from './utils/redact-url'
 import { seedSuperAdminFromEnv } from './services/user.service'
 import { startScheduler } from './services/activity-status-scheduler'
 import errorHandler from './middleware/error-handler'
@@ -40,14 +41,16 @@ export const createApp = async (): Promise<void> => {
     },
   })
   app.use('/api', limiter)
+  // webhook 面也限流（query token 鉴权可被暴力尝试，且直接触发 DB 查询）
+  app.use('/webhook', limiter)
 
   // 解析中间件
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-  // 日志中间件
+  // 日志中间件（token 查询参数脱敏，避免鉴权凭据落入日志）
   app.use((req: Request, res: Response, next: NextFunction) => {
-    console.info(`${req.method} ${req.url} - ${req.ip}`)
+    console.info(`${req.method} ${redactUrlToken(req.url)} - ${req.ip}`)
     next()
   })
 

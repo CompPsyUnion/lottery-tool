@@ -20,6 +20,7 @@ import * as LotteryCodeService from '../../services/lottery-code.service'
 import * as LotteryRecordService from '../../services/lottery-record.service'
 import {
   OPERATION_TYPES,
+  log as writeOperationLog,
   logActivityOperation as writeActivityLog,
 } from '../../services/operation-log.service'
 
@@ -47,6 +48,67 @@ const requireActivityAccess = async (activityId: string, req: Request): Promise<
 
   return activity
 }
+
+// 活动设置键级校验（创建与更新共用；POST 白名单重建、PUT 合并覆盖，见各 handler）
+const activitySettingsValidators = [
+  body('settings.max_lottery_codes')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('最大抽奖码数量必须是正整数'),
+
+  body('settings.lottery_code_format')
+    .optional()
+    .isIn([
+      '4_digit_number',
+      '8_digit_number',
+      '8_digit_alphanumeric',
+      '12_digit_number',
+      '12_digit_alphanumeric',
+    ])
+    .withMessage('抽奖码格式不正确'),
+
+  body('settings.allow_duplicate_phone')
+    .optional()
+    .isBoolean()
+    .withMessage('允许重复手机号必须是布尔值'),
+
+  body('settings.require_signature').optional().isBoolean().withMessage('签字开关必须是布尔值'),
+
+  // 金山表单接入：qid 字段映射 / 绑定码 / 邮件通知开关
+  body('settings.kdocs_field_map').optional().isObject().withMessage('金山表单字段映射必须是对象'),
+
+  body('settings.kdocs_field_map.name')
+    .optional()
+    .isString()
+    .isLength({ max: 32 })
+    .withMessage('金山表单姓名字段 qid 不正确'),
+
+  body('settings.kdocs_field_map.student_id')
+    .optional()
+    .isString()
+    .isLength({ max: 32 })
+    .withMessage('金山表单学号字段 qid 不正确'),
+
+  body('settings.kdocs_field_map.email')
+    .optional()
+    .isString()
+    .isLength({ max: 32 })
+    .withMessage('金山表单邮箱字段 qid 不正确'),
+
+  body('settings.kdocs_field_map.phone')
+    .optional()
+    .isString()
+    .isLength({ max: 32 })
+    .withMessage('金山表单手机号字段 qid 不正确'),
+
+  body('settings.kdocs_bind_code')
+    .optional()
+    .isString()
+    .isLength({ max: 50 })
+    .withMessage('绑定码不能超过50个字符'),
+
+  body('settings.kdocs_notify').optional().isBoolean().withMessage('通知开关必须是布尔值'),
+]
 
 /**
  * @route   GET /api/admin/activities
@@ -140,21 +202,7 @@ router.post(
 
     body('end_time').optional().isISO8601().withMessage('结束时间格式错误'),
 
-    body('settings.max_lottery_codes')
-      .optional()
-      .isInt({ min: 1 })
-      .withMessage('最大抽奖码数量必须是正整数'),
-
-    body('settings.lottery_code_format')
-      .optional()
-      .isIn([
-        '4_digit_number',
-        '8_digit_number',
-        '8_digit_alphanumeric',
-        '12_digit_number',
-        '12_digit_alphanumeric',
-      ])
-      .withMessage('抽奖码格式不正确'),
+    ...activitySettingsValidators,
   ],
   validateRequest,
   logActivityOperation(OPERATION_TYPES.CREATE_ACTIVITY),
@@ -184,6 +232,16 @@ router.post(
           lottery_code_format: settings.lottery_code_format || '8_digit_number',
           allow_duplicate_phone: settings.allow_duplicate_phone || false,
           require_signature: settings.require_signature === true,
+        }
+        // 金山表单接入配置（可选；字段映射空对象 = 回落默认 qid）
+        if (settings.kdocs_field_map && typeof settings.kdocs_field_map === 'object') {
+          activityData.settings.kdocs_field_map = settings.kdocs_field_map
+        }
+        if (settings.kdocs_bind_code !== undefined) {
+          activityData.settings.kdocs_bind_code = settings.kdocs_bind_code
+        }
+        if (settings.kdocs_notify !== undefined) {
+          activityData.settings.kdocs_notify = settings.kdocs_notify === true
         }
       }
 
@@ -220,6 +278,8 @@ router.put(
     body('start_time').optional().isISO8601().withMessage('开始时间格式错误'),
 
     body('end_time').optional().isISO8601().withMessage('结束时间格式错误'),
+
+    ...activitySettingsValidators,
   ],
   validateRequest,
   logActivityOperation(OPERATION_TYPES.UPDATE_ACTIVITY),
@@ -237,8 +297,8 @@ router.put(
 
       const activity = await requireActivityAccess(activityId, req)
 
-      // 白名单解构：只有这四个字段可经 PUT 修改（settings/webhook/created_by 等不可覆盖）
-      const { name, description, start_time, end_time } = req.body
+      // 白名单解构：基本信息四字段 + settings（键级合并，见下）
+      const { name, description, start_time, end_time, settings } = req.body
       const updateData: Partial<Activity> = {}
       if (name !== undefined) updateData.name = name
       if (description !== undefined) updateData.description = description
@@ -247,6 +307,41 @@ router.put(
       }
       if (end_time !== undefined) {
         updateData.end_time = end_time ? new Date(end_time) : null
+      }
+
+      // settings 合并更新：仅覆盖请求中出现的键，未出现的保留原值
+      // （此前 PUT 完全忽略 settings，编辑页的设置改动会被静默丢弃）
+      if (settings !== undefined) {
+        if (typeof settings !== 'object' || settings === null) {
+          throw createError('VALIDATION_INVALID_FORMAT', 'settings 必须是对象')
+        }
+        const merged: Record<string, unknown> = { ...(activity.settings || {}) }
+        if (settings.max_lottery_codes !== undefined) {
+          merged.max_lottery_codes = settings.max_lottery_codes
+        }
+        if (settings.lottery_code_format !== undefined) {
+          merged.lottery_code_format = settings.lottery_code_format
+        }
+        if (settings.allow_duplicate_phone !== undefined) {
+          merged.allow_duplicate_phone = settings.allow_duplicate_phone === true
+        }
+        if (settings.require_signature !== undefined) {
+          merged.require_signature = settings.require_signature === true
+        }
+        if (settings.kdocs_field_map !== undefined) {
+          // 整体替换字段映射（传空对象 = 清除自定义，回落默认 qid）
+          merged.kdocs_field_map =
+            settings.kdocs_field_map && typeof settings.kdocs_field_map === 'object'
+              ? settings.kdocs_field_map
+              : {}
+        }
+        if (settings.kdocs_bind_code !== undefined) {
+          merged.kdocs_bind_code = settings.kdocs_bind_code
+        }
+        if (settings.kdocs_notify !== undefined) {
+          merged.kdocs_notify = settings.kdocs_notify === true
+        }
+        updateData.settings = merged as Activity['settings']
       }
 
       // 验证时间逻辑（与已有值合并后判断）
@@ -496,9 +591,21 @@ router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next:
   }
 })
 
+// webhook 接入信息组装（webhook-info 与 regenerate 共用；路由实际挂载在 /webhook，无 /api 前缀）
+const buildWebhookInfo = (activity: Activity) => {
+  const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`
+  return {
+    webhook_url: `${baseUrl}/webhook/activities/${activity.webhook_id}/lottery-codes`,
+    // 金山表单只能配置 URL（无法自定义请求头），token 直接拼在查询参数
+    kdocs_url: `${baseUrl}/webhook/activities/${activity.webhook_id}/kdocs?token=${activity.webhook_token}`,
+    webhook_token: activity.webhook_token as string,
+    activity_id: activity.webhook_id as string,
+  }
+}
+
 /**
  * @route   GET /api/admin/activities/:id/webhook-info
- * @desc    获取活动的Webhook接口信息
+ * @desc    获取活动的Webhook接口信息（批量接码端点 + 金山表单端点）
  * @access  Private (Admin)
  */
 router.get('/:id/webhook-info', async (req: Request, res: Response, next: NextFunction) => {
@@ -507,20 +614,53 @@ router.get('/:id/webhook-info', async (req: Request, res: Response, next: NextFu
 
     const activity = await requireActivityAccess(activityId, req)
 
-    const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`
-
     res.json({
       success: true,
-      data: {
-        webhook_url: `${baseUrl}/api/webhook/activities/${activity.webhook_id}/lottery-codes`,
-        webhook_token: activity.webhook_token,
-        activity_id: activity.webhook_id,
-      },
+      data: buildWebhookInfo(activity),
     })
   } catch (error) {
     next(error)
   }
 })
+
+/**
+ * @route   POST /api/admin/activities/:id/webhook-token/regenerate
+ * @desc    重新生成活动的Webhook Token（旧 token 立即失效）
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:id/webhook-token/regenerate',
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activityId = req.params.id
+
+      const activity = await requireActivityAccess(activityId, req)
+
+      const token = await ActivityService.regenerateWebhookToken(activity.id)
+      if (!token) {
+        throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
+      }
+
+      await writeOperationLog({
+        user_id: (req as any).user ? (req as any).user.id : null,
+        operation_type: OPERATION_TYPES.REGENERATE_WEBHOOK_TOKEN,
+        operation_detail: `重新生成Webhook Token: ${activity.name}`,
+        target_type: 'ACTIVITY',
+        target_id: activity.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
+
+      res.json({
+        success: true,
+        data: buildWebhookInfo({ ...activity, webhook_token: token }),
+        message: 'Webhook Token 已重新生成，旧 Token 已失效',
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes

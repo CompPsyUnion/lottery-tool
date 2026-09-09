@@ -198,6 +198,110 @@
         </div>
       </div>
 
+      <!-- 金山表单接入（可选：表单提交自动生成抽奖码 + 邮件通知） -->
+      <div class="space-y-4 pt-4 border-t">
+        <h3 class="text-lg font-medium text-gray-900">金山表单接入（可选）</h3>
+        <p class="text-xs text-muted-foreground -mt-2">
+          金山表单（KDocs）提交后经 Webhook 自动创建抽奖码（学号即抽奖码），并向参与者邮箱发送通知。
+          端点地址在活动详情页「Webhook 接入」卡片获取。
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField v-slot="{ field: componentField }" name="settings.kdocs_field_map.name">
+            <FormItem>
+              <FormLabel>姓名题 qid</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="k9ce0p（默认）" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 留空使用默认题号，在金山表单编辑器中查看题目 qid </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
+          <FormField v-slot="{ field: componentField }" name="settings.kdocs_field_map.student_id">
+            <FormItem>
+              <FormLabel>学号题 qid</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="br1kvx（默认）" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 学号将作为抽奖码，须符合上方抽奖码格式 </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
+          <FormField v-slot="{ field: componentField }" name="settings.kdocs_field_map.phone">
+            <FormItem>
+              <FormLabel>手机号题 qid</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="7wpvum（默认）" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 留空使用默认题号 </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
+          <FormField v-slot="{ field: componentField }" name="settings.kdocs_field_map.email">
+            <FormItem>
+              <FormLabel>邮箱题 qid</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="30f4xe（默认）" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 用于接收报名成功通知邮件 </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+        </div>
+
+        <FormField v-slot="{ field: componentField }" name="settings.kdocs_bind_code">
+          <FormItem>
+            <FormLabel>绑定码（可选）</FormLabel>
+            <FormControl>
+              <Input
+                type="text"
+                maxlength="50"
+                placeholder="原样返回给表单侧的标识值"
+                v-bind="componentField"
+              />
+            </FormControl>
+            <FormDescription>
+              配置后 Webhook 响应中原样带回该值（供表单侧展示），可留空
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        </FormField>
+
+        <FormField v-slot="{ field: componentField }" name="settings.kdocs_notify">
+          <FormItem class="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div class="space-y-0.5">
+              <FormLabel class="text-base">报名成功邮件通知</FormLabel>
+              <FormDescription>
+                表单提交创建抽奖码后，向参与者邮箱发送包含抽奖码的通知邮件
+                （需超级管理员在系统设置中配置邮件通道）。
+              </FormDescription>
+            </div>
+            <FormControl>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="(componentField as any).value"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                  (componentField as any).value ? 'bg-blue-600' : 'bg-gray-200',
+                ]"
+                @click="form.setFieldValue('settings.kdocs_notify', !(componentField as any).value)"
+              >
+                <span
+                  :class="[
+                    'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    (componentField as any).value ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </FormControl>
+          </FormItem>
+        </FormField>
+      </div>
+
       <!-- 提交按钮 -->
       <div
         :class="[
@@ -280,6 +384,16 @@ const formSchema = toTypedSchema(
             ])
             .optional(),
           require_signature: z.boolean().optional(),
+          kdocs_field_map: z
+            .object({
+              name: z.string().max(32, 'qid 不能超过32个字符').optional(),
+              student_id: z.string().max(32, 'qid 不能超过32个字符').optional(),
+              email: z.string().max(32, 'qid 不能超过32个字符').optional(),
+              phone: z.string().max(32, 'qid 不能超过32个字符').optional(),
+            })
+            .optional(),
+          kdocs_bind_code: z.string().max(50, '绑定码不能超过50个字符').optional(),
+          kdocs_notify: z.boolean().optional(),
         })
         .optional(),
     })
@@ -310,6 +424,9 @@ const form = useForm({
       max_lottery_codes: undefined,
       lottery_code_format: '4_digit_number',
       require_signature: false,
+      kdocs_field_map: { name: '', student_id: '', email: '', phone: '' },
+      kdocs_bind_code: '',
+      kdocs_notify: true,
     },
   },
 })
@@ -355,6 +472,14 @@ const loadActivity = async () => {
         max_lottery_codes: activity.settings?.max_lottery_codes,
         lottery_code_format: activity.settings?.lottery_code_format || '4_digit_number',
         require_signature: activity.settings?.require_signature || false,
+        kdocs_field_map: {
+          name: activity.settings?.kdocs_field_map?.name || '',
+          student_id: activity.settings?.kdocs_field_map?.student_id || '',
+          email: activity.settings?.kdocs_field_map?.email || '',
+          phone: activity.settings?.kdocs_field_map?.phone || '',
+        },
+        kdocs_bind_code: activity.settings?.kdocs_bind_code || '',
+        kdocs_notify: activity.settings?.kdocs_notify !== false,
       },
     })
     selectedStatus.value = activity.status
@@ -393,6 +518,8 @@ const onSubmit = form.handleSubmit(async (values) => {
 
   try {
     // 处理表单数据
+    // 金山字段映射始终整对象提交（空串 = 显式使用默认 qid；后端 PUT 为键级合并不丢配置）
+    const fieldMap = values.settings?.kdocs_field_map
     const formData: CreateActivityRequest | UpdateActivityRequest = {
       name: values.name,
       description: values.description || undefined,
@@ -403,12 +530,15 @@ const onSubmit = form.handleSubmit(async (values) => {
         max_lottery_codes: values.settings?.max_lottery_codes || undefined,
         lottery_code_format: values.settings?.lottery_code_format || undefined,
         require_signature: values.settings?.require_signature || false,
+        kdocs_field_map: {
+          name: fieldMap?.name?.trim() || '',
+          student_id: fieldMap?.student_id?.trim() || '',
+          email: fieldMap?.email?.trim() || '',
+          phone: fieldMap?.phone?.trim() || '',
+        },
+        kdocs_bind_code: values.settings?.kdocs_bind_code ?? '',
+        kdocs_notify: values.settings?.kdocs_notify !== false,
       },
-    }
-
-    // 清理空的 settings（仅当所有值都是 undefined 时才删除）
-    if (formData.settings && Object.values(formData.settings).every((v) => v === undefined)) {
-      delete formData.settings
     }
 
     if (isEditMode.value && activityId.value) {

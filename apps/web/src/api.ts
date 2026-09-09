@@ -29,6 +29,7 @@ import type {
   MailConfig,
   UploadSignatureRequest,
   UploadSignatureResponse,
+  ActivityWebhookInfo,
 } from './types/api'
 
 // API 基础配置
@@ -359,6 +360,18 @@ export const adminActivityApi = {
     return apiFetch(`/admin/activities/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    })
+  },
+
+  // Webhook 接入信息（批量接码 + 金山表单端点 URL 与 token）
+  async getWebhookInfo(id: number): Promise<ActivityWebhookInfo> {
+    return apiFetch(`/admin/activities/${id}/webhook-info`)
+  },
+
+  // 重新生成 Webhook Token（旧 token 立即失效；响应与 webhook-info 同形）
+  async regenerateWebhookToken(id: number): Promise<ActivityWebhookInfo> {
+    return apiFetch(`/admin/activities/${id}/webhook-token/regenerate`, {
+      method: 'POST',
     })
   },
 
