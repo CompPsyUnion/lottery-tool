@@ -83,6 +83,10 @@ husky 钩子在提交时自动执行（可绕过，见钩子文件内说明）�
   等），且实体改动必须伴随已注册的新数据库迁移（提交信息含
   `bypass migration check` 可跳过迁移检查）
 
+## 参与贡献
+
+贡献流程（Fork → 从 main 新建分支 → PR 合并回 main）见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
 ## 部署
 
 - **后端**：push 到 `main` 自动构建镜像推 GHCR（`ghcr.io/comppsyunion/lottery-tool-service`），

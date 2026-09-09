@@ -6,6 +6,7 @@
 | ---------------------------------------- | ------------------------------------------------------- |
 | [DEPLOY_EDGEONE.md](./DEPLOY_EDGEONE.md) | 前端部署至腾讯云 EdgeOne Pages（环境变量配置 API 地址） |
 | [DEPLOY_BACKEND.md](./DEPLOY_BACKEND.md) | 后端部署（GHCR 镜像 + Docker Compose）                  |
+| [贡献指南](../CONTRIBUTING.md)           | 参与贡献（Fork → 分支 → PR 合并到 main）                |
 
 ## 各包自述
 
