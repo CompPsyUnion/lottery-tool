@@ -1,15 +1,16 @@
 import { Request, Response, NextFunction } from 'express'
 import { QueryFailedError } from 'typeorm'
 import logger from '../utils/logger'
+import { redactUrlToken } from '../utils/redact-url'
 
-export const errorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
+export const errorHandler = (err: any, req: Request, res: Response, _next: NextFunction): void => {
   const error = { ...err }
   error.message = err.message
 
-  // 记录错误日志
+  // 记录错误日志（url 脱敏 ?token= 查询参数）
   logger.error(`Error: ${error.message}`, {
     stack: err.stack,
-    url: req.url,
+    url: redactUrlToken(req.url),
     method: req.method,
     ip: req.ip,
     userAgent: req.get('User-Agent'),

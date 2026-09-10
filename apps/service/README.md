@@ -189,6 +189,46 @@ curl -X POST http://localhost:3000/webhook/activities/WEBHOOK_ID/lottery-codes \
   }'
 ```
 
+> Both webhook endpoints accept the token either as an `Authorization: Bearer` header
+> (preferred) or as a `?token=` query parameter (fallback — form platforms such as
+> KDocs can only configure a URL and cannot set custom headers). Query tokens are
+> redacted (`token=***`) in request logs; regenerate a compromised token via
+> `POST /admin/activities/:id/webhook-token/regenerate` (old token invalidates immediately).
+
+### KDocs (金山表单) Webhook
+
+`POST /webhook/activities/WEBHOOK_ID/kdocs` — receives KDocs form submissions
+(`create_answer` events only; other events are acked with 200 but skipped), maps answer
+fields to a lottery code (student ID) + participant info, and sends a sign-up
+confirmation email through the system mail channel (replaces the former standalone
+Python middleware + Power Automate flow).
+
+```bash
+curl -X POST "http://localhost:3000/webhook/activities/WEBHOOK_ID/kdocs?token=WEBHOOK_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event": "create_answer",
+    "formId": "form-001",
+    "answerContents": [
+      { "qid": "k9ce0p", "title": "姓名｜Name", "value": "张三" },
+      { "qid": "br1kvx", "title": "学号｜Student ID", "value": "20230001" },
+      { "qid": "30f4xe", "title": "UNNC邮箱｜UNNC Email", "value": "zhangsan@unnc.edu.cn" },
+      { "qid": "7wpvum", "title": "手机号｜Telephone Number", "value": "13800138000" }
+    ]
+  }'
+```
+
+- Field mapping: per-activity `settings.kdocs_field_map` (`{name, student_id, email,
+phone}` qids; defaults to the original UNNC form's qids shown above). Optional
+  `settings.kdocs_bind_code` is echoed back verbatim; `settings.kdocs_notify`
+  (default on) toggles the confirmation email.
+- Name and student ID are required (400 with the missing field names otherwise);
+  phone/email are best-effort. The student ID must match the activity's
+  `lottery_code_format`; duplicate submissions are idempotent (200 `created: false`).
+- Responses: `201 {data: {code, name, created: true, bind_code?}}` on creation,
+  `200 {data: {code, created: false}}` on duplicates, `200` skip for non-create
+  events. Email failures are logged but never fail the webhook response.
+
 ## Directory Structure
 
 ```text

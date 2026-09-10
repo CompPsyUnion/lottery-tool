@@ -9,3 +9,6 @@ docker-compose.yml
 
 # GitHub Actions workflow（缩进由 YAML 工具管，不归 Prettier）
 .github/workflows/**
+
+# IDE 工作区配置（cSpell 词典由编辑器/脚本维护，不归 Prettier）
+.vscode/settings.json

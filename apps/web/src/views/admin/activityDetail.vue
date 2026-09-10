@@ -69,6 +69,94 @@
       </div>
     </div>
 
+    <!-- Webhook 接入卡（第三方表单 / 系统对接） -->
+    <div v-if="webhookInfo" class="rounded-lg border p-4">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div class="min-w-0 flex-1 space-y-4">
+          <div class="flex items-center gap-2">
+            <span class="text-sm font-medium">Webhook 接入</span>
+            <span class="text-xs text-muted-foreground">第三方表单 / 系统对接</span>
+          </div>
+
+          <!-- Token（默认掩码） -->
+          <div class="space-y-1.5">
+            <div class="text-xs text-muted-foreground">访问 Token</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <code
+                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+              >
+                {{ showToken ? webhookInfo.webhook_token : '••••••••••••••••••••••••' }}
+              </code>
+              <Button variant="outline" size="sm" class="shrink-0" @click="showToken = !showToken">
+                {{ showToken ? '隐藏' : '显示' }}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                @click="copyText(webhookInfo.webhook_token, 'Token 已复制')"
+              >
+                复制
+              </Button>
+            </div>
+          </div>
+
+          <!-- 批量接码端点 -->
+          <div class="space-y-1.5">
+            <div class="text-xs text-muted-foreground">
+              批量添加抽奖码端点（请求头 Authorization: Bearer &lt;Token&gt;）
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <code
+                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+              >
+                POST {{ webhookInfo.webhook_url }}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                @click="copyText(webhookInfo.webhook_url, '端点地址已复制')"
+              >
+                复制
+              </Button>
+            </div>
+          </div>
+
+          <!-- 金山表单端点（token 已内嵌，可直接粘贴） -->
+          <div class="space-y-1.5">
+            <div class="text-xs text-muted-foreground">
+              金山表单端点（token 已含在地址中，直接粘贴到表单 Webhook 配置即可）
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <code
+                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+              >
+                {{ showToken ? webhookInfo.kdocs_url : maskedKdocsUrl }}
+              </code>
+              <Button
+                variant="outline"
+                size="sm"
+                class="shrink-0"
+                @click="copyText(webhookInfo.kdocs_url, '金山表单端点已复制')"
+              >
+                复制
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <Button
+          variant="destructive"
+          class="shrink-0"
+          :disabled="regenerating"
+          @click="handleRegenerateToken"
+        >
+          {{ regenerating ? '生成中...' : '重新生成 Token' }}
+        </Button>
+      </div>
+    </div>
+
     <!-- 概览数值卡片 -->
     <div class="grid md:grid-cols-3 grid-cols-1 gap-4">
       <NumberCard title="奖品种数" :value="prizeTypeCount" :icon="Gift" />
@@ -173,7 +261,7 @@ import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
 import { API } from '@/api'
 import { toast } from 'vue-sonner'
-import type { Activity, Prize, LotteryRecord } from '@/types/api'
+import type { Activity, Prize, LotteryRecord, ActivityWebhookInfo } from '@/types/api'
 import type { TableColumn } from '@/components/common/types'
 
 const route = useRoute()
@@ -367,6 +455,65 @@ const openLotteryPage = () => {
   window.open(`${location.origin}/lottery?activityId=${activityId}`, '_blank')
 }
 
+// ---- Webhook 接入 ----
+const webhookInfo = ref<ActivityWebhookInfo | null>(null)
+const showToken = ref(false)
+const regenerating = ref(false)
+
+/** 掩码展示形态（kdocs_url 内嵌 token；复制始终复制真实地址） */
+const maskedKdocsUrl = computed(() =>
+  (webhookInfo.value?.kdocs_url ?? '').replace(/token=[^&]+/, 'token=***'),
+)
+
+const fetchWebhookInfo = async () => {
+  try {
+    webhookInfo.value = await API.adminActivity.getWebhookInfo(activityId)
+  } catch {
+    // 获取失败隐藏卡片（不影响页面主内容）
+    webhookInfo.value = null
+  }
+}
+
+const handleRegenerateToken = async () => {
+  if (
+    !confirm('确定要重新生成 Webhook Token 吗？旧 Token（含金山表单中已配置的地址）将立即失效。')
+  ) {
+    return
+  }
+  regenerating.value = true
+  try {
+    // 响应与 webhook-info 同形，直接替换
+    webhookInfo.value = await API.adminActivity.regenerateWebhookToken(activityId)
+    showToken.value = true
+    toast.success('Token 已重新生成，请更新表单侧配置')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '重新生成失败')
+  } finally {
+    regenerating.value = false
+  }
+}
+
+// 复制到剪贴板（安全上下文用 clipboard API，否则回退 execCommand）
+const copyText = async (text: string, successMessage: string) => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    toast.success(successMessage)
+  } catch {
+    toast.error('复制失败，请手动复制')
+  }
+}
+
 // 获取奖品列表
 const fetchPrizes = async () => {
   try {
@@ -461,7 +608,7 @@ const handleResignConfirm = async (dataUrl: string) => {
 
 // 初始化数据
 const initData = async () => {
-  await Promise.all([fetchActivity(), fetchPrizes(), fetchLotteryRecords()])
+  await Promise.all([fetchActivity(), fetchPrizes(), fetchLotteryRecords(), fetchWebhookInfo()])
 }
 
 // 组件挂载时获取数据

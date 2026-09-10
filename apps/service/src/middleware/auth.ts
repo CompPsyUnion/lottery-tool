@@ -106,7 +106,7 @@ export const optionalAuth = async (
     }
 
     next()
-  } catch (error) {
+  } catch {
     // 可选认证失败不阻止请求继续
     next()
   }
@@ -123,7 +123,11 @@ export const authenticateWebhook = async (
 ): Promise<void> => {
   try {
     const authHeader = req.headers['authorization']
-    const token = authHeader && authHeader.split(' ')[1]
+    // token 两种来源：Authorization: Bearer 头（优先），或 ?token= 查询参数兜底
+    // （金山表单等表单系统的 webhook 只能配置 URL，无法自定义请求头）
+    const headerToken = authHeader && authHeader.split(' ')[1]
+    const queryToken = typeof req.query.token === 'string' ? req.query.token : undefined
+    const token = headerToken || queryToken
 
     if (!token) {
       throw createError('AUTH_TOKEN_INVALID', 'Webhook Token缺失')
@@ -170,7 +174,7 @@ export const generateToken = (userId: number): string => {
 export const verifyToken = (token: string): jwt.JwtPayload | string | null => {
   try {
     return jwt.verify(token, process.env.JWT_SECRET as string)
-  } catch (error) {
+  } catch {
     return null
   }
 }
