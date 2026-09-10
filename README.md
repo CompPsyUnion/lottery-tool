@@ -75,7 +75,8 @@ email-poster POST webhook 形式，无 SMTP）。
 - **金山表单接入**：金山表单（KDocs）提交经 Webhook 自动创建抽奖码（学号即抽奖码），
   并经系统邮件通道发送报名成功通知（原独立 Python 中间件 + Power Automate 方案已内嵌替代）；
   端点地址与 token 在活动详情页「Webhook 接入」卡片获取（token 已内嵌 URL，可直接粘贴），
-  字段 qid 映射 / 绑定码 / 邮件通知开关在活动编辑页配置
+  字段 qid 映射 / 绑定码 / 邮件通知开关在活动编辑页配置，
+  配置指南见 [docs/KDOCS_WEBHOOK.md](docs/KDOCS_WEBHOOK.md)
 
 ## 提交规范
 
