@@ -593,18 +593,34 @@ router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next:
 
 // webhook 基地址推导：BASE_URL 显式配置优先，否则按请求实际到达的主机
 // （转发头 / Host——反向代理默认保留 Host，前后端分域部署时也正确；
-// Origin 仅兜底——它可能是前端域名而非 API 域名）
+// Origin 仅兜底——浏览器 API 调用的 Origin 是前端域名，指过去 webhook 会打到 SPA 上）
 const resolveBaseUrl = (req: Request): string => {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '')
 
-  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim()
-  const proto = forwardedProto || req.protocol
+  // 协议链：X-Forwarded-Proto → X-Forwarded-Scheme → RFC7239 Forwarded；
+  // 均缺失时按主机启发式——公网域名 https（公网服务均为 TLS，明文也会被 308），
+  // 本机/内网 http（局域网明文部署）。不用 req.protocol：代理未透传时它恒为 http，
+  // 会压掉公网 https 兜底
+  const headerProto =
+    req.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    req.get('x-forwarded-scheme')?.split(',')[0]?.trim() ||
+    req.get('forwarded')?.match(/proto=(\w+)/i)?.[1]
+  const hostname = (
+    req.get('x-forwarded-host')?.split(',')[0]?.trim() ||
+    req.get('host') ||
+    ''
+  ).toLowerCase()
+  const isLocalHost =
+    hostname === '' ||
+    hostname.startsWith('localhost') ||
+    hostname.startsWith('127.') ||
+    hostname.startsWith('192.168.') ||
+    hostname.startsWith('10.') ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(hostname) ||
+    hostname.startsWith('[::1]')
+  const proto = headerProto || (isLocalHost ? 'http' : 'https')
 
-  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim()
-  if (forwardedHost) return `${proto}://${forwardedHost}`
-
-  const host = req.get('host')
-  if (host) return `${proto}://${host}`
+  if (hostname) return `${proto}://${hostname}`
 
   const origin = req.get('origin')
   if (origin) return origin.replace(/\/+$/, '')

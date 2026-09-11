@@ -19,6 +19,10 @@ const isRuntimeEnvironment = (): boolean => {
 export const createApp = async (): Promise<void> => {
   const app = express()
 
+  // 反向代理（Caddy/nginx 等）后的部署：让 req.ip / req.protocol 采用 X-Forwarded-*，
+  // 否则限流按代理 IP 计（全站共享一个桶）、协议推导误判为 http
+  app.set('trust proxy', true)
+
   // 安全中间件
   app.use(helmet())
   app.use(
