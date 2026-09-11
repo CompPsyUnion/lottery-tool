@@ -52,9 +52,13 @@ export const createApp = async (): Promise<void> => {
   app.use(express.json({ limit: '10mb' }))
   app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
-  // 日志中间件（token 查询参数脱敏，避免鉴权凭据落入日志）
+  // 日志中间件（token 查询参数脱敏；响应完成后记录，带状态码便于排查厂商对接。
+  // 用 originalUrl：finish 时路由已剥掉挂载前缀，req.url 不完整）
   app.use((req: Request, res: Response, next: NextFunction) => {
-    console.info(`${req.method} ${redactUrlToken(req.url)} - ${req.ip}`)
+    const loggedUrl = redactUrlToken(req.originalUrl)
+    res.on('finish', () => {
+      console.info(`${req.method} ${loggedUrl} - ${req.ip} - ${res.statusCode}`)
+    })
     next()
   })
 

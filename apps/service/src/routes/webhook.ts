@@ -254,9 +254,10 @@ router.post(
         )
       }
 
-      // 重复提交 / 表单重试：幂等返回，不算失败
+      // 重复提交 / 表单重试：幂等返回，不算失败（同样带顶层 bind_code 以满足绑定校验重试）
       const duplicateResponse = () =>
         res.status(200).json({
+          ...(bindCode ? { bind_code: bindCode } : {}),
           success: true,
           data: { code, name: participantInfo.name ?? null, created: false },
           message: '抽奖码已存在，未重复创建',
@@ -322,7 +323,11 @@ router.post(
         })()
       }
 
-      return res.status(201).json({
+      // 金山契约：绑定校验即发一条完整 create_answer 样例提交，要求 HTTP 200 且
+      // 响应含 bind_code（原中间件为裸 200 {"bind_code":...}）——故不用 201，
+      // 且 bind_code 放顶层（同时保留 data.* 供自身前端/调试使用）
+      return res.status(200).json({
+        ...(bindCode ? { bind_code: bindCode } : {}),
         success: true,
         data: {
           code,

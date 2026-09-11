@@ -227,9 +227,11 @@ phone}` qids; defaults to the original UNNC form's qids shown above).
 - Name and student ID are required (400 with the missing field names otherwise);
   phone/email are best-effort. The student ID must match the activity's
   `lottery_code_format`; duplicate submissions are idempotent (200 `created: false`).
-- Responses: `201 {data: {code, name, created: true, bind_code?}}` on creation,
-  `200 {data: {code, created: false}}` on duplicates, `200` skip for non-create
-  events. Email failures are logged but never fail the webhook response.
+- Responses: `200` with a **top-level `bind_code`** (when configured) on creation and
+  duplicates — KDocs' "verify and bind" step sends a full sample submission and requires
+  HTTP 200 + `bind_code` in the response. The sample submission creates a real lottery
+  code; clean it up after binding. `200` skip for non-create events. Email failures are
+  logged but never fail the webhook response.
 
 ## Directory Structure
 
