@@ -20,8 +20,10 @@ export const createApp = async (): Promise<void> => {
   const app = express()
 
   // 反向代理（Caddy/nginx 等）后的部署：让 req.ip / req.protocol 采用 X-Forwarded-*，
-  // 否则限流按代理 IP 计（全站共享一个桶）、协议推导误判为 http
-  app.set('trust proxy', true)
+  // 否则限流按代理 IP 计（全站共享一个桶）、协议推导误判为 http。
+  // 必须用精确跳数而非 true——true 会被 express-rate-limit 判定
+  // ERR_ERL_PERMISSIVE_TRUST_PROXY（可伪造 XFF 绕过限流）而拒绝工作
+  app.set('trust proxy', 1)
 
   // 安全中间件
   app.use(helmet())

@@ -227,31 +227,44 @@ router.post(
         })
       }
 
+      // 绑定探测兼容：金山「检验并绑定」的样例提交可能不含有效字段/合法学号，
+      // 校验失败时若已配绑定码，仍回 200 + bind_code（不创建码，原因记日志）——
+      // 绑定契约要求 HTTP 200；真实坏数据同样走此路径，靠日志追踪
+      const probeFallback = (reason: string) => {
+        logger.warn(`金山提交校验失败（按绑定探测兼容返回 bind_code）：${reason}`)
+        return res.status(200).json({
+          ...(bindCode ? { bind_code: bindCode } : {}),
+          success: false,
+          data: { created: false, reason },
+          message: reason,
+        })
+      }
+
       // 字段映射：活动配置覆盖默认 qid（原中间件对接表单）
       const fieldMap = resolveKdocsFieldMap(settings.kdocs_field_map)
       const { code, participantInfo, missingFields } = transformKdocsWebhook(payload, fieldMap)
 
       if (missingFields.length > 0) {
-        throw createError('VALIDATION_MISSING_PARAMS', `缺少必要字段：${missingFields.join('、')}`)
+        const reason = `缺少必要字段：${missingFields.join('、')}`
+        if (bindCode) return probeFallback(reason)
+        throw createError('VALIDATION_MISSING_PARAMS', reason)
       }
 
       // 抽奖码格式须符合活动配置（学号按字符串处理）
       const lotteryCodeFormat = settings.lottery_code_format || '8_digit_number'
       if (!validateLotteryCodeFormat(code as string, lotteryCodeFormat)) {
-        throw createError(
-          'VALIDATION_INVALID_FORMAT',
-          `抽奖码 ${code} 不符合活动格式（${getFormatDescription(lotteryCodeFormat)}）`,
-        )
+        const reason = `抽奖码 ${code} 不符合活动格式（${getFormatDescription(lotteryCodeFormat)}）`
+        if (bindCode) return probeFallback(reason)
+        throw createError('VALIDATION_INVALID_FORMAT', reason)
       }
 
       // 配额检查
       const maxLotteryCodes = settings.max_lottery_codes || 1000
       const existingCount = await LotteryCodeService.countByActivity(activity.id)
       if (existingCount + 1 > maxLotteryCodes) {
-        throw createError(
-          'VALIDATION_OUT_OF_RANGE',
-          `添加后将超过活动最大抽奖码限制 ${maxLotteryCodes}`,
-        )
+        const reason = `添加后将超过活动最大抽奖码限制 ${maxLotteryCodes}`
+        if (bindCode) return probeFallback(reason)
+        throw createError('VALIDATION_OUT_OF_RANGE', reason)
       }
 
       // 重复提交 / 表单重试：幂等返回，不算失败（同样带顶层 bind_code 以满足绑定校验重试）
