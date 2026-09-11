@@ -160,6 +160,37 @@ router.post(
   },
 )
 
+// 活动配置的绑定码（金山表单绑定 URL 时验证请求要求响应 {"bind_code": "..."}）
+const resolveBindCode = (settings: Record<string, unknown>): string | undefined => {
+  const value = settings.kdocs_bind_code
+  return typeof value === 'string' && value !== '' ? value : undefined
+}
+
+/**
+ * @route   GET /webhook/activities/:webhook_id/kdocs
+ * @desc    金山表单绑定验证：配置 URL 时表单发验证请求，需返回 {"bind_code": "..."}
+ * @access  Webhook（Authorization: Bearer 头 或 ?token= 查询参数）
+ */
+router.get(
+  '/activities/:webhook_id/kdocs',
+  [authenticateWebhook],
+  (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activity = (req as any).activity // 从中间件获取
+      const bindCode = resolveBindCode(activity.settings || {})
+      if (!bindCode) {
+        throw createError(
+          'VALIDATION_MISSING_PARAMS',
+          '活动未配置绑定码（kdocs_bind_code）——金山表单绑定验证要求返回 {"bind_code": "..."}，请在活动编辑页「金山表单接入」中配置表单显示的绑定码',
+        )
+      }
+      res.status(200).json({ bind_code: bindCode })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
 /**
  * @route   POST /webhook/activities/:webhook_id/kdocs
  * @desc    接收金山表单（KDocs）webhook：答案转为抽奖码入库并发通知邮件
@@ -182,9 +213,13 @@ router.post(
       const payload = req.body as KdocsWebhookPayload
       const activity = (req as any).activity // 从中间件获取
       const settings = activity.settings || {}
+      const bindCode = resolveBindCode(settings)
 
-      // 只处理创建答案事件（其他事件确认接收但不处理）
+      // 金山绑定验证也可能以 POST 探测：配置了绑定码的非提交请求按验证响应返回
       if (payload.event !== 'create_answer') {
+        if (bindCode) {
+          return res.status(200).json({ bind_code: bindCode })
+        }
         return res.status(200).json({
           success: true,
           message: '事件已接收但未处理',
@@ -286,12 +321,6 @@ router.post(
           }
         })()
       }
-
-      // 绑定码（可选）：活动配置的原样返回值，用于表单侧展示
-      const bindCode =
-        typeof settings.kdocs_bind_code === 'string' && settings.kdocs_bind_code !== ''
-          ? settings.kdocs_bind_code
-          : undefined
 
       return res.status(201).json({
         success: true,

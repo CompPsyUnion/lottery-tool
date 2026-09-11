@@ -591,9 +591,30 @@ router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next:
   }
 })
 
+// webhook 基地址推导：BASE_URL 显式配置优先，否则按请求实际到达的主机
+// （转发头 / Host——反向代理默认保留 Host，前后端分域部署时也正确；
+// Origin 仅兜底——它可能是前端域名而非 API 域名）
+const resolveBaseUrl = (req: Request): string => {
+  if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '')
+
+  const forwardedProto = req.get('x-forwarded-proto')?.split(',')[0]?.trim()
+  const proto = forwardedProto || req.protocol
+
+  const forwardedHost = req.get('x-forwarded-host')?.split(',')[0]?.trim()
+  if (forwardedHost) return `${proto}://${forwardedHost}`
+
+  const host = req.get('host')
+  if (host) return `${proto}://${host}`
+
+  const origin = req.get('origin')
+  if (origin) return origin.replace(/\/+$/, '')
+
+  return `http://localhost:${process.env.PORT || 3000}`
+}
+
 // webhook 接入信息组装（webhook-info 与 regenerate 共用；路由实际挂载在 /webhook，无 /api 前缀）
-const buildWebhookInfo = (activity: Activity) => {
-  const baseUrl = process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`
+const buildWebhookInfo = (activity: Activity, req: Request) => {
+  const baseUrl = resolveBaseUrl(req)
   return {
     webhook_url: `${baseUrl}/webhook/activities/${activity.webhook_id}/lottery-codes`,
     // 金山表单只能配置 URL（无法自定义请求头），token 直接拼在查询参数
@@ -616,7 +637,7 @@ router.get('/:id/webhook-info', async (req: Request, res: Response, next: NextFu
 
     res.json({
       success: true,
-      data: buildWebhookInfo(activity),
+      data: buildWebhookInfo(activity, req),
     })
   } catch (error) {
     next(error)
@@ -653,7 +674,7 @@ router.post(
 
       res.json({
         success: true,
-        data: buildWebhookInfo({ ...activity, webhook_token: token }),
+        data: buildWebhookInfo({ ...activity, webhook_token: token }, req),
         message: 'Webhook Token 已重新生成，旧 Token 已失效',
       })
     } catch (error) {

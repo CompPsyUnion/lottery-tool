@@ -30,7 +30,7 @@ export interface ActivitySettings {
     | '12_digit_alphanumeric'
   allow_duplicate_phone?: boolean
   require_signature?: boolean
-  /** 金山表单接入（可选）：字段 qid 映射 / 回显绑定码 / 报名成功邮件通知 */
+  /** 金山表单接入（可选）：字段 qid 映射 / 绑定验证码 / 报名成功邮件通知 */
   kdocs_field_map?: KdocsFieldMap
   kdocs_bind_code?: string
   kdocs_notify?: boolean

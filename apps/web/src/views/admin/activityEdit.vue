@@ -254,17 +254,17 @@
 
         <FormField v-slot="{ field: componentField }" name="settings.kdocs_bind_code">
           <FormItem>
-            <FormLabel>绑定码（可选）</FormLabel>
+            <FormLabel>绑定码</FormLabel>
             <FormControl>
               <Input
                 type="text"
                 maxlength="50"
-                placeholder="原样返回给表单侧的标识值"
+                placeholder="金山表单绑定验证时显示的绑定码"
                 v-bind="componentField"
               />
             </FormControl>
             <FormDescription>
-              配置后 Webhook 响应中原样带回该值（供表单侧展示），可留空
+              金山表单配置 Webhook 时必填：填入表单绑定界面显示的绑定码，系统以它响应验证请求
             </FormDescription>
             <FormMessage />
           </FormItem>

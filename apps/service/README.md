@@ -219,9 +219,11 @@ curl -X POST "http://localhost:3000/webhook/activities/WEBHOOK_ID/kdocs?token=WE
 ```
 
 - Field mapping: per-activity `settings.kdocs_field_map` (`{name, student_id, email,
-phone}` qids; defaults to the original UNNC form's qids shown above). Optional
-  `settings.kdocs_bind_code` is echoed back verbatim; `settings.kdocs_notify`
-  (default on) toggles the confirmation email.
+phone}` qids; defaults to the original UNNC form's qids shown above).
+  `settings.kdocs_bind_code` is **required for the KDocs URL binding step**: KDocs
+  probes the URL during configuration and expects `{"bind_code": "..."}` — a `GET`
+  (or non-submission `POST`) returns exactly that once configured.
+  `settings.kdocs_notify` (default on) toggles the confirmation email.
 - Name and student ID are required (400 with the missing field names otherwise);
   phone/email are best-effort. The student ID must match the activity's
   `lottery_code_format`; duplicate submissions are idempotent (200 `created: false`).
