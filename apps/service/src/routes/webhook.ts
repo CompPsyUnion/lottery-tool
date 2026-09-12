@@ -202,10 +202,11 @@ router.post(
   [
     authenticateWebhook,
 
-    // 金山载荷宽松校验：字段级合法性由转换器判定
-    body('event').optional().isString(),
-    body('answerContents').optional().isArray(),
-    body('answerContents.*.qid').optional().isString(),
+    // 金山载荷形态不受我方约束（绑定探测的样例出现过数字型 qid，强类型校验会在
+    // 兼容逻辑之前 400）：只做类型收敛不加校验，字段级合法性由转换器与路由判定
+    body('answerContents.*.qid')
+      .optional()
+      .customSanitizer((v) => (typeof v === 'number' ? String(v) : v)),
   ],
   validateRequest,
   async (req: Request, res: Response, next: NextFunction) => {
