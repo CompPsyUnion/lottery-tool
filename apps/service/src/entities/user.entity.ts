@@ -5,10 +5,10 @@ import {
   Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-} from 'typeorm';
+} from 'typeorm'
 
-export type UserRole = 'super_admin' | 'admin';
-export type UserStatus = 'active' | 'inactive';
+export type UserRole = 'super_admin' | 'admin'
+export type UserStatus = 'active' | 'inactive'
 
 @Entity({ name: 'users' })
 @Index('uq_users_username', ['username'], { unique: true })
@@ -17,16 +17,16 @@ export class User {
     type: 'integer',
     primaryKeyConstraintName: 'pk_users',
   })
-  id!: number;
+  id!: number
 
   @Column({ name: 'username', type: 'varchar', length: 50, nullable: false })
-  username!: string;
+  username!: string
 
   @Column({ name: 'password_hash', type: 'varchar', length: 255, nullable: false })
-  password_hash!: string;
+  password_hash!: string
 
   @Column({ name: 'email', type: 'varchar', length: 100, nullable: true })
-  email!: string | null;
+  email!: string | null
 
   @Column({
     name: 'role',
@@ -36,7 +36,7 @@ export class User {
     nullable: false,
     default: 'admin',
   })
-  role!: UserRole;
+  role!: UserRole
 
   @Column({
     name: 'status',
@@ -46,11 +46,11 @@ export class User {
     nullable: false,
     default: 'active',
   })
-  status!: UserStatus;
+  status!: UserStatus
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
-  created_at!: Date;
+  created_at!: Date
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
-  updated_at!: Date;
+  updated_at!: Date
 }

@@ -17,7 +17,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:api": "pnpm run --silent build:scripts && node scripts/dist/test-apis.mjs"
+    "test:api": "pnpm run --silent build:scripts && node scripts/dist/test-apis.mjs",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
   },
   "keywords": [
     "lottery",
@@ -31,6 +33,7 @@
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "dotenv": "^16.3.1",
+    "email-poster": "^0.3.9",
     "express": "^4.18.2",
     "express-rate-limit": "^7.1.5",
     "express-validator": "^7.0.1",
@@ -58,11 +61,13 @@
     "@types/pg": "^8.23.1",
     "@types/supertest": "^6.0.3",
     "axios": "^1.6.2",
+    "eslint": "^9.39.5",
     "jest": "^29.7.0",
     "supertest": "^6.3.3",
     "ts-jest": "^29.4.12",
     "tsup": "^8.5.1",
-    "typescript": "^5.5.4"
+    "typescript": "^5.5.4",
+    "typescript-eslint": "^8.68.0"
   },
   "engines": {
     "node": ">=18.0.0"

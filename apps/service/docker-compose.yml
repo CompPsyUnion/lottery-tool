@@ -1,63 +1,65 @@
-version: '3.8'
-
 services:
   postgres:
     image: postgres:18-alpine
     container_name: lottery-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: lottery
-      POSTGRES_PASSWORD: lottery
-      POSTGRES_DB: lottery_system
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-lottery}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lottery}
+      POSTGRES_DB: ${POSTGRES_DB:-lottery_system}
+    # 默认仅 docker 内网可达（backend 经 postgres:5432 连接），不对宿主机暴露；
+    # 需要外部工具连库时取消下面两行注释
+    # ports:
+    #   - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       # PG 18+ 约定：单一挂载点在 /var/lib/postgresql（数据落在其子目录，便于 pg_upgrade）
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lottery -d lottery_system"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lottery} -d ${POSTGRES_DB:-lottery_system}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   lottery-backend:
-    build: .
+    # GHCR 官方镜像（push main 自动构建）；固定到 sha tag（如 main-30a7566）可锁定版本
+    image: ${BACKEND_IMAGE:-ghcr.io/comppsyunion/lottery-tool-service:latest}
     container_name: lottery-backend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "${BACKEND_PORT:-3000}:3000"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      # 数据库配置 - 请根据你的实际数据库配置修改
-      DB_HOST: postgres
+      # 所有变量优先取同目录 .env，未设置时回退到 :- 后的默认值。
+      # 数据库凭据复用 POSTGRES_*，与 postgres 服务保持同一来源。
+      DB_HOST: ${DB_HOST:-postgres}
       DB_PORT: 5432
-      DB_NAME: lottery_system
-      DB_USER: lottery
-      DB_PASSWORD: lottery
+      DB_NAME: ${POSTGRES_DB:-lottery_system}
+      DB_USER: ${POSTGRES_USER:-lottery}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-lottery}
 
-      # JWT配置
-      JWT_SECRET: your-super-secret-jwt-key-change-in-production
-      JWT_EXPIRES_IN: 24h
+      # JWT配置（务必修改为强随机值）
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
 
-      # 超级管理员引导（可选）：同时设置用户名/密码且库为空时，启动即创建超管；
+      # 超级管理员引导（可选）：同时设置用户名/密码且库为空时启动即创建超管；
       # 未设置时由首位 POST /auth/register 注册的用户成为超管
-      # SUPER_ADMIN_USERNAME: admin
-      # SUPER_ADMIN_PASSWORD: change-me-in-production
-      # SUPER_ADMIN_EMAIL: admin@example.com
+      SUPER_ADMIN_USERNAME: ${SUPER_ADMIN_USERNAME:-}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
 
       # 应用配置
       NODE_ENV: production
       PORT: 3000
-      CORS_ORIGIN: "*"
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
 
       # Docker环境标识
       DOCKER_ENV: true
     volumes:
-      - ./logs:/app/logs
+      - ./logs:/app/apps/service/logs
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 10s
       retries: 3

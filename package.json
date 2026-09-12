@@ -9,9 +9,12 @@
     "dev:service": "pnpm --filter @lottery-tool/service dev",
     "build": "pnpm --filter @lottery-tool/web build",
     "start:service": "pnpm --filter @lottery-tool/service start",
-    "lint": "pnpm --filter @lottery-tool/web lint",
+    "lint": "pnpm -r --no-bail lint",
     "test": "pnpm --filter @lottery-tool/service test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "lint:fix": "pnpm -r --no-bail lint:fix && pnpm format",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=20"
@@ -25,6 +28,19 @@
     ]
   },
   "devDependencies": {
-    "husky": "^9.1.7"
+    "husky": "^9.1.7",
+    "lint-staged": "^17.4.1",
+    "prettier": "^3.9.6"
+  },
+  "lint-staged": {
+    "apps/service/**/*.{ts,tsx}": [
+      "prettier --check",
+      "pnpm --filter @lottery-tool/service exec eslint"
+    ],
+    "apps/web/**/*.{ts,vue}": [
+      "prettier --check",
+      "pnpm --filter @lottery-tool/web exec eslint"
+    ],
+    "*.{md,json,yaml,yml,css}": "prettier --check"
   }
 }

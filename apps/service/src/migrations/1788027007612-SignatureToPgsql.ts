@@ -18,13 +18,13 @@ export class SignatureToPgsql1788027007612 implements MigrationInterface {
 }
 
 const UP: string[] = [
-  "ALTER TABLE \"lottery_records\" DROP COLUMN \"signature_key\"",
-  "ALTER TABLE \"lottery_records\" DROP COLUMN \"signature_url\"",
-  "ALTER TABLE \"lottery_records\" ADD \"signature_data\" text",
+  'ALTER TABLE "lottery_records" DROP COLUMN "signature_key"',
+  'ALTER TABLE "lottery_records" DROP COLUMN "signature_url"',
+  'ALTER TABLE "lottery_records" ADD "signature_data" text',
 ]
 
 const DOWN: string[] = [
-  "ALTER TABLE \"lottery_records\" ADD \"signature_key\" character varying(512)",
-  "ALTER TABLE \"lottery_records\" ADD \"signature_url\" text",
-  "ALTER TABLE \"lottery_records\" DROP COLUMN \"signature_data\"",
+  'ALTER TABLE "lottery_records" ADD "signature_key" character varying(512)',
+  'ALTER TABLE "lottery_records" ADD "signature_url" text',
+  'ALTER TABLE "lottery_records" DROP COLUMN "signature_data"',
 ]

@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { ChevronRight } from 'lucide-vue-next';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '../ui/collapsible';
+import { ChevronRight } from 'lucide-vue-next'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import {
   SidebarGroup,
   SidebarGroupLabel,
@@ -14,7 +10,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-} from '../ui/sidebar';
+} from '../ui/sidebar'
 
 const props = defineProps<{
   items?: Array<{
@@ -26,7 +22,7 @@ const props = defineProps<{
       url: string
     }>
   }>
-}>();
+}>()
 </script>
 
 <template>
@@ -35,8 +31,8 @@ const props = defineProps<{
     <SidebarMenu>
       <template v-for="item in props.items">
         <Collapsible
-          :key="`collapsible-${item.title}`"
           v-if="item.items"
+          :key="`collapsible-${item.title}`"
           :default-open="true"
           class="group"
         >
@@ -45,7 +41,9 @@ const props = defineProps<{
               <SidebarMenuButton :tooltip="item.title">
                 <component :is="item.icon" v-if="item.icon" />
                 <span>{{ item.title }}</span>
-                <ChevronRight class="ml-auto transition-transform duration-200 group-data-[state=open]:rotate-90" />
+                <ChevronRight
+                  class="ml-auto transition-transform duration-200 group-data-[state=open]:rotate-90"
+                />
               </SidebarMenuButton>
             </CollapsibleTrigger>
           </SidebarMenuItem>
@@ -61,7 +59,7 @@ const props = defineProps<{
             </SidebarMenuSub>
           </CollapsibleContent>
         </Collapsible>
-        <SidebarMenuItem :key="`direct-${item.title}`" v-else>
+        <SidebarMenuItem v-else :key="`direct-${item.title}`">
           <SidebarMenuButton as-child :tooltip="item.title">
             <router-link :to="item.url">
               <component :is="item.icon" v-if="item.icon" />

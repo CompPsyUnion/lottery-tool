@@ -1,19 +1,18 @@
 name: Build and publish Docker image
 
-# push main -> 构建后端镜像并推 GHCR（latest + sha）。
+# push -> 构建后端镜像并推 GHCR。
+# 主分支：latest + main-<sha>；其他分支：develop + develop-<sha>。
 # 构建上下文为仓库根（Dockerfile 在 apps/service/）。
 
 on:
   push:
-    branches:
-      - "*"
     paths:
-      - 'apps/service/**'
-      - 'package.json'
-      - 'pnpm-workspace.yaml'
-      - 'pnpm-lock.yaml'
-      - '.dockerignore'
-      - '.github/workflows/docker.yml'
+      - "apps/service/**"
+      - "package.json"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - ".dockerignore"
+      - ".github/workflows/docker.yml"
   workflow_dispatch:
 
 permissions:
@@ -54,7 +53,9 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=main-
+            type=sha,prefix=main-,enable={{is_default_branch}}
+            type=raw,value=develop,enable=${{ github.ref_name != github.event.repository.default_branch }}
+            type=sha,prefix=develop-,enable=${{ github.ref_name != github.event.repository.default_branch }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v7

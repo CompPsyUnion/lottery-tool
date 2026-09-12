@@ -28,11 +28,50 @@ const fail = (message: string): never => {
   process.exit(1)
 }
 
+/** 定位 commit message 文件：优先 CLI 参数（相对路径按 git 顶层解析——
+ * 钩子可能传相对路径，此前按本包目录 resolve 会落空导致 bypass 失效），
+ * 否则用 git rev-parse --git-path 定位（兼容 worktree 等非标准 .git 布局） */
+const locateCommitMsg = (): string | null => {
+  const msgArg = process.argv[2]
+  if (msgArg) {
+    const gitTop = run('git rev-parse --show-toplevel')
+    const byArg = resolve(gitTop, msgArg)
+    if (existsSync(byArg)) return byArg
+  }
+  try {
+    const byGit = resolve(run('git rev-parse --git-path COMMIT_EDITMSG'))
+    if (existsSync(byGit)) return byGit
+  } catch {
+    /* 非钩子环境（无 git）时忽略 */
+  }
+  return null
+}
+
+/** 实体目录的暂存 diff 是否包含非注释行变更（纯注释改动不触发迁移要求）。
+ * pathspec 用 ':/' 仓库根相对形式——脚本 cwd 在 apps/service，普通前缀会被
+ * 按相对 cwd 解析而落空 */
+const hasSubstantiveEntityChange = (): boolean => {
+  const diff = run("git diff --cached -U0 -- ':/apps/service/src/entities/'")
+  if (!diff) return false
+  const isCommentLine = (l: string) => {
+    const t = l.replace(/^[+-]\s*/, '').trimStart()
+    return t.startsWith('//') || t.startsWith('/*') || t.startsWith('*')
+  }
+  return diff
+    .split('\n')
+    .some(
+      (l) =>
+        (l.startsWith('+') || l.startsWith('-')) &&
+        !l.startsWith('+++') &&
+        !l.startsWith('---') &&
+        !isCommentLine(l),
+    )
+}
+
 const main = (): void => {
   // Optional commit-message bypass (first CLI arg, or git's default location).
-  const msgArg = process.argv[2]
-  const commitMsgPath = msgArg ? resolve(msgArg) : resolve(rootDir, '.git', 'COMMIT_EDITMSG')
-  if (existsSync(commitMsgPath)) {
+  const commitMsgPath = locateCommitMsg()
+  if (commitMsgPath) {
     if (readFileSync(commitMsgPath, 'utf8').includes('bypass migration check')) {
       console.log('bypass migration check directive found in commit message, skipping.')
       return
@@ -44,8 +83,8 @@ const main = (): void => {
 
   const lines = staged.split('\n').map((l) => l.trim().split(/\s+/))
 
-  const entityChanged = lines.some(([, p]) => p?.startsWith('apps/service/src/entities/'))
-  if (!entityChanged) return
+  const entityStaged = lines.some(([, p]) => p?.startsWith('apps/service/src/entities/'))
+  if (!entityStaged || !hasSubstantiveEntityChange()) return
 
   const migrationAdded = lines.some(
     ([status, p]) => status === 'A' && p?.startsWith('apps/service/src/migrations/'),
@@ -64,9 +103,7 @@ const main = (): void => {
   const barrel = readFileSync(resolve(migrationsDir, 'index.ts'), 'utf8')
   const unregistered = files.filter((f) => !barrel.includes(`./${f.replace(/\.ts$/, '')}`))
   if (unregistered.length) {
-    fail(
-      `Migration file(s) not registered in src/migrations/index.ts: ${unregistered.join(', ')}`,
-    )
+    fail(`Migration file(s) not registered in src/migrations/index.ts: ${unregistered.join(', ')}`)
   }
 }
 

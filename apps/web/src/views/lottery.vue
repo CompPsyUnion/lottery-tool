@@ -2,7 +2,9 @@
   <div class="min-h-screen bg-white flex items-center justify-center p-4">
     <!-- 加载状态 -->
     <div v-if="loading" class="text-gray-800 text-center">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"></div>
+      <div
+        class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"
+      ></div>
       <p>加载中...</p>
     </div>
 
@@ -10,27 +12,42 @@
     <div v-else-if="error" class="text-gray-800 text-center bg-red-100 p-6 rounded-lg">
       <p class="text-lg font-semibold mb-2">加载失败</p>
       <p class="mb-4">{{ error }}</p>
-      <button @click="loadActivityInfo" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+      <button
+        class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+        @click="loadActivityInfo"
+      >
         重试
       </button>
     </div>
 
     <!-- 主要内容 -->
-    <div v-else class="w-full max-w-4xl flex flex-col lg:flex-row gap-8 items-center justify-center">
+    <div
+      v-else
+      class="w-full max-w-4xl flex flex-col lg:flex-row gap-8 items-center justify-center"
+    >
       <!-- 盒子一：抽奖框 -->
       <div class="lottery-box-one bg-white rounded-2xl p-8 w-full max-w-md">
         <!-- 活动标题 -->
         <div class="text-center mb-8">
-          <img v-if="activityInfo?.icon" :src="activityInfo.icon" alt="活动图标" class="h-16 w-16 mx-auto mb-4 rounded-full object-cover" />
-          <h1 class="text-2xl font-bold text-gray-800 mb-2">{{ activityInfo?.name || '抽奖活动' }}</h1>
-          <p v-if="activityInfo?.description" class="text-gray-600 text-sm">{{ activityInfo.description }}</p>
+          <img
+            v-if="activityInfo?.icon"
+            :src="activityInfo.icon"
+            alt="活动图标"
+            class="h-16 w-16 mx-auto mb-4 rounded-full object-cover"
+          />
+          <h1 class="text-2xl font-bold text-gray-800 mb-2">
+            {{ activityInfo?.name || '抽奖活动' }}
+          </h1>
+          <p v-if="activityInfo?.description" class="text-gray-600 text-sm">
+            {{ activityInfo.description }}
+          </p>
         </div>
 
         <!-- 抽奖码输入框 -->
         <div class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">抽奖码</label>
-          <Input 
-            v-model="lotteryCode" 
+          <Input
+            v-model="lotteryCode"
             placeholder="请输入抽奖码"
             class="w-full text-center text-lg md:text-2xl lg:text-3xl font-mono tracking-wider lottery-code-input"
             :maxlength="getMaxLength()"
@@ -55,45 +72,41 @@
         </div>
 
         <!-- 立即抽奖按钮 -->
-        <button 
-          @click="handleDraw" 
-          :disabled="!canDraw || isDrawing"
-          class="draw-button"
-        >
+        <button :disabled="!canDraw || isDrawing" class="draw-button" @click="handleDraw">
           <Gift class="w-5 h-5" />
           {{ isDrawing ? '抽奖中...' : '立即抽奖' }}
         </button>
       </div>
 
       <!-- 盒子二：数字键盘（仅桌面和平板显示，且仅offline模式） -->
-      <div 
+      <div
         v-if="activityInfo?.lottery_mode === 'offline'"
         class="keyboard-box bg-white bg-opacity-90 backdrop-blur-sm p-6 hidden md:block"
       >
         <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">数字键盘</h3>
         <div class="grid grid-cols-3 gap-3 w-64">
           <!-- 数字键 1-9 -->
-          <button 
-            v-for="num in [1,2,3,4,5,6,7,8,9]" 
+          <button
+            v-for="num in [1, 2, 3, 4, 5, 6, 7, 8, 9]"
             :key="num"
-            @click="inputNumber(num.toString())"
             class="h-12 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-800 transition-colors"
+            @click="inputNumber(num.toString())"
           >
             {{ num }}
           </button>
           <!-- 空白 -->
           <div></div>
           <!-- 数字键 0 -->
-          <button 
-            @click="inputNumber('0')"
+          <button
             class="h-12 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-800 transition-colors"
+            @click="inputNumber('0')"
           >
             0
           </button>
           <!-- 退格键 -->
-          <button 
-            @click="deleteNumber"
+          <button
             class="h-12 bg-red-100 hover:bg-red-200 rounded-lg font-semibold text-red-600 transition-colors flex items-center justify-center"
+            @click="deleteNumber"
           >
             <Delete class="w-5 h-5" />
           </button>
@@ -102,58 +115,84 @@
     </div>
 
     <!-- 抽奖结果Dialog -->
-    <Dialog :open="showResult" @update:open="(open) => showResult = open">
+    <Dialog :open="showResult" @update:open="(open) => (showResult = open)">
       <DialogContent class="max-w-lg mx-4 rounded-2xl border-0 shadow-2xl">
         <DialogHeader class="pb-6">
           <DialogTitle class="text-center space-y-4">
             <div v-if="lotteryResult?.is_winner" class="space-y-4">
               <div class="text-6xl animate-bounce">🎉</div>
-              <h2 class="text-2xl font-bold bg-linear-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
+              <h2
+                class="text-2xl font-bold bg-linear-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent"
+              >
                 恭喜中奖！
               </h2>
             </div>
             <div v-else class="space-y-4">
               <div class="text-6xl">🤣👉🤡</div>
-              <h2 class="text-2xl font-bold text-slate-700">
-                很遗憾
-              </h2>
+              <h2 class="text-2xl font-bold text-slate-700">很遗憾</h2>
             </div>
           </DialogTitle>
         </DialogHeader>
-        
+
         <div class="text-center space-y-6 py-4">
           <div v-if="lotteryResult?.is_winner" class="space-y-4">
-            <div class="bg-linear-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100">
+            <div
+              class="bg-linear-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-100"
+            >
               <p class="text-sm text-green-700 font-medium mb-2">您获得的奖品</p>
               <p class="text-2xl font-bold text-green-800 mb-3">{{ lotteryResult.prize?.name }}</p>
-              <p v-if="lotteryResult.prize?.description" class="text-green-600 text-sm leading-relaxed">
+              <p
+                v-if="lotteryResult.prize?.description"
+                class="text-green-600 text-sm leading-relaxed"
+              >
                 {{ lotteryResult.prize.description }}
               </p>
             </div>
-            
+
             <!-- 参与者信息 -->
-            <div v-if="lotteryResult.lottery_code?.participant_info" class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+            <div
+              v-if="lotteryResult.lottery_code?.participant_info"
+              class="bg-slate-50 rounded-xl p-4 border border-slate-200"
+            >
               <p class="text-sm text-slate-600 font-medium mb-2">中奖信息</p>
               <div class="space-y-1 text-sm text-slate-700">
-                <p><span class="font-medium">姓名：</span>{{ lotteryResult.lottery_code.participant_info.name }}</p>
-                <p><span class="font-medium">抽奖码：</span>{{ lotteryResult.lottery_code.code }}</p>
+                <p>
+                  <span class="font-medium">姓名：</span
+                  >{{ lotteryResult.lottery_code.participant_info.name }}
+                </p>
+                <p>
+                  <span class="font-medium">抽奖码：</span>{{ lotteryResult.lottery_code.code }}
+                </p>
               </div>
             </div>
           </div>
-          
+
           <div v-else class="space-y-4">
             <div class="bg-slate-50 rounded-xl p-6 border border-slate-200">
               <p class="text-lg text-slate-700 mb-2">本次未中奖</p>
               <p class="text-sm text-slate-500">感谢您的参与，请继续努力！</p>
             </div>
           </div>
+
+          <p v-if="lotteryResult?.is_demo" class="text-center text-xs text-muted-foreground">
+            测试抽奖——未扣减奖品库存，测试记录不计入统计
+          </p>
         </div>
-        
+
         <DialogFooter class="pt-6">
           <div class="w-full flex justify-center">
-            <button 
-              @click="closeResult"
+            <!-- 需要签字：主按钮为「去签字」，手动进入必签流程（不再自动跳转） -->
+            <button
+              v-if="pendingSignature"
               class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
+              @click="goSignature"
+            >
+              去签字确认
+            </button>
+            <button
+              v-else
+              class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
+              @click="closeResult"
             >
               确定
             </button>
@@ -161,226 +200,245 @@
         </DialogFooter>
       </DialogContent>
     </Dialog>
-    
-    <!-- 签字弹窗 -->
+
+    <!-- 签字弹窗（必签：不可取消/ESC/遮罩关闭，提交成功才结束） -->
     <SignatureDialog
       v-model:visible="showSignature"
       :is-submitting="isSubmittingSignature"
       :error-message="signatureError"
+      :dismissible="false"
       @confirm="handleSignatureConfirm"
-      @cancel="handleSignatureCancel"
     />
-    
+
     <!-- Toast 组件 -->
     <Toaster />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Gift, Delete } from 'lucide-vue-next';
-import { toast, Toaster } from 'vue-sonner';
-import { lotteryApi, adminActivityApi, authApi } from '@/api';
-import { useUserStore } from '@/stores/user';
-import type { Activity, Prize, LotteryRecord } from '@/types/api';
-import SignatureDialog from '@/components/common/SignatureDialog.vue';
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Gift, Delete } from 'lucide-vue-next'
+import { toast, Toaster } from 'vue-sonner'
+import { lotteryApi, adminActivityApi, authApi } from '@/api'
+import { useUserStore } from '@/stores/user'
+import type { Activity, Prize, LotteryRecord } from '@/types/api'
+import SignatureDialog from '@/components/common/SignatureDialog.vue'
 
-const router = useRouter();
-const userStore = useUserStore();
-const urlParams = new URLSearchParams(window.location.search);
-const activityId = Number(urlParams.get('activityId'));
+const router = useRouter()
+const userStore = useUserStore()
+const urlParams = new URLSearchParams(window.location.search)
+const activityId = Number(urlParams.get('activityId'))
 
 // 响应式数据
-const loading = ref(true);
-const error = ref<string>('');
-const activityInfo = ref<Activity | null>(null);
-const prizes = ref<Prize[]>([]);
-const lotteryCode = ref<string>('');
-const isDrawing = ref(false);
-const showResult = ref(false);
+const loading = ref(true)
+const error = ref<string>('')
+const activityInfo = ref<Activity | null>(null)
+const prizes = ref<Prize[]>([])
+const lotteryCode = ref<string>('')
+const isDrawing = ref(false)
+const showResult = ref(false)
 const lotteryResult = ref<{
-  is_winner: boolean;
-  prize?: Prize | null;
-  lottery_record?: LotteryRecord | null;
-  lottery_code?: { 
-    code: string; 
-    participant_info?: { name: string; phone: string; email?: string } 
-  } | null;
-} | null>(null);
+  is_winner: boolean
+  /** 测试码测试抽奖：不扣库存、不写记录 */
+  is_demo?: boolean
+  prize?: Prize | null
+  lottery_record?: LotteryRecord | null
+  lottery_code?: {
+    code: string
+    participant_info?: { name: string; phone: string; email?: string }
+  } | null
+} | null>(null)
+
+// URL 携带 code 时预填抽奖码（管理端测试链接）；编程式赋值不触发输入过滤，
+// 不会破坏含小写字母的码值
+const presetCode = urlParams.get('code')
+if (presetCode) lotteryCode.value = presetCode
 
 // 签字相关
-const showSignature = ref(false);
-const isSubmittingSignature = ref(false);
-const signatureError = ref('');
-const currentRecordId = ref<number | null>(null);
+const showSignature = ref(false)
+const isSubmittingSignature = ref(false)
+const signatureError = ref('')
+const currentRecordId = ref<number | null>(null)
+/** 本次抽奖需要签字（结果弹窗据此展示「去签字」按钮，手动进入） */
+const pendingSignature = ref(false)
 
 // 参与者信息（仅online模式需要）
 const participantInfo = ref({
   name: '',
   phone: '',
   email: '',
-});
+})
 
 // 计算属性
 const canDraw = computed(() => {
-  if (!lotteryCode.value.trim()) return false;
-  
+  if (!lotteryCode.value.trim()) return false
+
   if (activityInfo.value?.lottery_mode === 'online') {
-    return participantInfo.value.name.trim() && participantInfo.value.phone.trim();
+    return participantInfo.value.name.trim() && participantInfo.value.phone.trim()
   }
-  
-  return true;
-});
+
+  return true
+})
 
 // 获取抽奖码最大长度
 const getMaxLength = () => {
-  const format = activityInfo.value?.settings?.lottery_code_format;
+  const format = activityInfo.value?.settings?.lottery_code_format
   switch (format) {
-  case '4_digit_number':
-    return 4;
-  case '8_digit_number':
-  case '8_digit_alphanumeric':
-    return 8;
-  case '12_digit_number':
-  case '12_digit_alphanumeric':
-    return 12;
-  default:
-    return 10;
+    case '4_digit_number':
+      return 4
+    case '8_digit_number':
+    case '8_digit_alphanumeric':
+      return 8
+    case '12_digit_number':
+    case '12_digit_alphanumeric':
+      return 12
+    default:
+      return 10
   }
-};
+}
 
 // 输入框变化处理
 const onInputChange = () => {
-  const format = activityInfo.value?.settings?.lottery_code_format;
+  const format = activityInfo.value?.settings?.lottery_code_format
   if (format?.includes('number')) {
     // 只允许数字
-    lotteryCode.value = lotteryCode.value.replace(/[^0-9]/g, '');
+    lotteryCode.value = lotteryCode.value.replace(/[^0-9]/g, '')
   } else if (format?.includes('alphanumeric')) {
     // 允许字母和数字
-    lotteryCode.value = lotteryCode.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    lotteryCode.value = lotteryCode.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
   }
-};
+}
 
 // 数字键盘输入
 const inputNumber = (num: string) => {
   if (lotteryCode.value.length < getMaxLength()) {
-    lotteryCode.value += num;
+    lotteryCode.value += num
   }
-};
+}
 
 // 删除数字
 const deleteNumber = () => {
-  lotteryCode.value = lotteryCode.value.slice(0, -1);
-};
+  lotteryCode.value = lotteryCode.value.slice(0, -1)
+}
 
 // 检查用户是否已登录（仅offline模式需要）
 const checkAuthForOffline = async (): Promise<boolean> => {
   if (activityInfo.value?.lottery_mode !== 'offline') {
-    return true; // online模式不需要登录
+    return true // online模式不需要登录
   }
-  
+
   // 检查是否有token
   if (!userStore.token) {
-    toast.error('线下活动需管理员登录');
-    router.push('/login');
-    return false;
+    toast.error('线下活动需管理员登录')
+    router.push('/login')
+    return false
   }
-  
+
   // 验证token是否有效
   try {
-    await authApi.me();
-    return true;
+    await authApi.me()
+    return true
   } catch {
     // token无效，清除并跳转登录
-    userStore.clearToken();
-    toast.error('线下活动需管理员登录');
-    router.push('/login');
-    return false;
+    userStore.clearToken()
+    toast.error('线下活动需管理员登录')
+    router.push('/login')
+    return false
   }
-};
+}
 
 // 加载活动信息
 const loadActivityInfo = async () => {
   if (!activityId) {
-    error.value = '缺少活动ID参数';
-    loading.value = false;
-    return;
+    error.value = '缺少活动ID参数'
+    loading.value = false
+    return
   }
 
   try {
-    loading.value = true;
-    error.value = '';
-    
-    const response = await lotteryApi.getActivity(activityId);
-    activityInfo.value = response.activity;
-    prizes.value = response.prizes || [];
-    
-    // 检查活动状态
-    if (activityInfo.value.status !== 'active') {
-      error.value = '活动未开始或已结束';
-      return;
+    loading.value = true
+    error.value = ''
+
+    const response = await lotteryApi.getActivity(activityId)
+    activityInfo.value = response.activity
+    prizes.value = response.prizes || []
+
+    // 检查活动状态（URL 带 code 为管理端测试入口：测试码无视活动状态，放行并提示）
+    if (activityInfo.value.status !== 'active' && !presetCode) {
+      error.value = activityInfo.value.status === 'ended' ? '活动已结束' : '活动未开始'
+      return
     }
-    
+    if (activityInfo.value.status !== 'active' && presetCode) {
+      toast.info('当前活动未在进行中——测试模式：测试抽奖码仍可体验抽奖流程')
+    }
   } catch (err) {
     // 加载活动信息失败
-    
+
     // 解析API返回的错误信息
-    let errorMessage = '获取活动信息失败，请稍后重试';
+    let errorMessage = '获取活动信息失败，请稍后重试'
     if (err && typeof err === 'object' && 'response' in err) {
-      const response = (err as { response?: { data?: { error?: { message?: string; details?: string } } } }).response;
+      const response = (
+        err as { response?: { data?: { error?: { message?: string; details?: string } } } }
+      ).response
       if (response?.data?.error) {
-        const apiError = response.data.error;
-        errorMessage = apiError.message || errorMessage;
+        const apiError = response.data.error
+        errorMessage = apiError.message || errorMessage
         if (apiError.details) {
-          errorMessage += ` (${apiError.details})`;
+          errorMessage += ` (${apiError.details})`
         }
       }
     } else if (err && typeof err === 'object' && 'message' in err) {
-      errorMessage = (err as { message: string }).message;
+      errorMessage = (err as { message: string }).message
     }
-    
-    error.value = errorMessage;
-    toast.error(errorMessage);
+
+    error.value = errorMessage
+    toast.error(errorMessage)
   } finally {
-    loading.value = false;
+    loading.value = false
   }
-};
+}
 
 // 处理抽奖
 const handleDraw = async () => {
-  if (!canDraw.value || isDrawing.value) return;
-  
+  if (!canDraw.value || isDrawing.value) return
+
   // 输入验证
   if (!lotteryCode.value.trim()) {
-    toast.error('请输入抽奖码');
-    return;
+    toast.error('请输入抽奖码')
+    return
   }
-  
+
   if (activityInfo.value?.lottery_mode === 'online') {
     if (!participantInfo.value.name.trim()) {
-      toast.error('请输入姓名');
-      return;
+      toast.error('请输入姓名')
+      return
     }
     if (!participantInfo.value.phone.trim()) {
-      toast.error('请输入手机号');
-      return;
+      toast.error('请输入手机号')
+      return
     }
   }
-  
+
   // 检查offline模式下的登录状态
-  const isAuthorized = await checkAuthForOffline();
+  const isAuthorized = await checkAuthForOffline()
   if (!isAuthorized) {
-    return;
+    return
   }
-  
+
   try {
-    isDrawing.value = true;
-    
-    let drawResponse;
-    
+    isDrawing.value = true
+
+    let drawResponse
+
     if (activityInfo.value?.lottery_mode === 'online') {
       // 线上抽奖
       drawResponse = await lotteryApi.draw(activityId, {
@@ -390,128 +448,126 @@ const handleDraw = async () => {
           phone: participantInfo.value.phone,
           email: participantInfo.value.email || undefined,
         },
-      });
+      })
     } else {
       // 线下抽奖
       drawResponse = await adminActivityApi.offlineDraw(activityId, {
         lottery_code: lotteryCode.value,
-      });
+      })
     }
-    
+
     // 统一处理抽奖结果
     lotteryResult.value = {
       is_winner: drawResponse.is_winner || false,
+      is_demo: drawResponse.is_demo === true,
       prize: drawResponse.prize || null,
       lottery_record: drawResponse.lottery_record || null,
       lottery_code: drawResponse.lottery_code || null,
-    };
-    
-    showResult.value = true;
+    }
 
-    // 线下抽奖且活动开启了签字功能时，弹出签字弹窗
-    const isOffline = activityInfo.value?.lottery_mode === 'offline';
-    const requireSignature = activityInfo.value?.settings?.require_signature === true;
-    const recordId = drawResponse.lottery_record?.id;
+    showResult.value = true
 
-    if (isOffline && requireSignature && recordId) {
-      currentRecordId.value = recordId;
-      // 延迟一下再弹出签字，让用户先看到抽奖结果
-      setTimeout(() => {
-        showResult.value = false;
-        showSignature.value = true;
-      }, 1500);
-    } else {
+    // 线下抽奖且开启签字：结果弹窗提供「去签字」按钮，手动点击后进入必签流程。
+    // 未中奖不需要签字（记录留为未签，可经记录页补签）
+    const isOffline = activityInfo.value?.lottery_mode === 'offline'
+    const requireSignature = activityInfo.value?.settings?.require_signature === true
+    const recordId = drawResponse.lottery_record?.id
+    const isWinner = drawResponse.is_winner === true
+    pendingSignature.value = !!(isOffline && requireSignature && recordId && isWinner)
+    if (recordId) currentRecordId.value = recordId
+
+    if (!pendingSignature.value) {
       // 不需要签字时，5秒后自动关闭结果弹窗
       setTimeout(() => {
         if (showResult.value) {
-          closeResult();
+          closeResult()
         }
-      }, 5000);
+      }, 5000)
     }
 
     // 显示抽奖结果提示
     if (lotteryResult.value?.is_winner && lotteryResult.value?.prize) {
-      toast.success(`🎉 恭喜您抽中了：${lotteryResult.value.prize.name}！`);
+      toast.success(`🎉 恭喜您抽中了：${lotteryResult.value.prize.name}！`)
     } else {
-      toast.info('很遗憾，本次未中奖，请再接再厉！');
+      toast.info('很遗憾，本次未中奖，请再接再厉！')
     }
-    
+
     // 清空输入
-    lotteryCode.value = '';
+    lotteryCode.value = ''
     if (activityInfo.value?.lottery_mode === 'online') {
-      participantInfo.value = { name: '', phone: '', email: '' };
+      participantInfo.value = { name: '', phone: '', email: '' }
     }
-    
   } catch (err) {
     // 抽奖失败
-    
+
     // 解析API返回的错误信息
-    let errorMessage = '抽奖失败，请稍后重试';
+    let errorMessage = '抽奖失败，请稍后重试'
     if (err && typeof err === 'object' && 'response' in err) {
-      const response = (err as { response?: { data?: { error?: { message?: string; details?: string } } } }).response;
+      const response = (
+        err as { response?: { data?: { error?: { message?: string; details?: string } } } }
+      ).response
       if (response?.data?.error) {
-        const apiError = response.data.error;
-        errorMessage = apiError.message || errorMessage;
+        const apiError = response.data.error
+        errorMessage = apiError.message || errorMessage
         if (apiError.details) {
-          errorMessage += ` (${apiError.details})`;
+          errorMessage += ` (${apiError.details})`
         }
       }
     } else if (err && typeof err === 'object' && 'message' in err) {
-      errorMessage = (err as { message: string }).message;
+      errorMessage = (err as { message: string }).message
     }
-    
-    toast.error(errorMessage);
+
+    toast.error(errorMessage)
   } finally {
-    isDrawing.value = false;
+    isDrawing.value = false
   }
-};
+}
 
 // 关闭结果弹窗
 const closeResult = () => {
-  showResult.value = false;
-  lotteryResult.value = null;
-};
+  showResult.value = false
+  lotteryResult.value = null
+  pendingSignature.value = false
+}
 
-// 签字确认
+// 从结果弹窗进入签字（手动触发）
+const goSignature = () => {
+  showResult.value = false
+  showSignature.value = true
+}
+
+// 签字确认（提交成功才关闭；失败保持弹窗可重试）
 const handleSignatureConfirm = async (dataUrl: string) => {
-  if (!currentRecordId.value || !activityId) return;
+  if (!currentRecordId.value || !activityId) return
 
-  isSubmittingSignature.value = true;
-  signatureError.value = '';
+  isSubmittingSignature.value = true
+  signatureError.value = ''
 
   try {
     await adminActivityApi.uploadSignature(activityId, currentRecordId.value, {
       image: dataUrl,
-    });
-    toast.success('签字提交成功');
-    showSignature.value = false;
-    currentRecordId.value = null;
-    lotteryResult.value = null;
+    })
+    toast.success('签字提交成功')
+    showSignature.value = false
+    currentRecordId.value = null
+    lotteryResult.value = null
+    pendingSignature.value = false
   } catch (err) {
-    let errorMessage = '签字上传失败，请重试';
+    let errorMessage = '签字上传失败，请重试'
     if (err && typeof err === 'object' && 'message' in err) {
-      errorMessage = (err as { message: string }).message;
+      errorMessage = (err as { message: string }).message
     }
-    signatureError.value = errorMessage;
-    toast.error(errorMessage);
+    signatureError.value = errorMessage
+    toast.error(errorMessage)
   } finally {
-    isSubmittingSignature.value = false;
+    isSubmittingSignature.value = false
   }
-};
-
-// 签字取消
-const handleSignatureCancel = () => {
-  showSignature.value = false;
-  signatureError.value = '';
-  currentRecordId.value = null;
-  lotteryResult.value = null;
-  toast.info('已取消签字，抽奖结果已保存');
-};
+}
 
 // 组件挂载时加载数据
 onMounted(() => {
-  loadActivityInfo();
-});
+  loadActivityInfo()
+})
 </script>
 
 <style scoped>
@@ -674,8 +730,12 @@ onMounted(() => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error-message {
@@ -762,7 +822,7 @@ onMounted(() => {
     border: none !important;
     box-shadow: none !important;
   }
-  
+
   .lottery-code-input:focus {
     border: none !important;
     box-shadow: none !important;
@@ -775,12 +835,12 @@ onMounted(() => {
   .keyboard-container {
     display: none !important;
   }
-  
+
   .lottery-content {
     flex-direction: column;
     gap: 1rem;
   }
-  
+
   .lottery-box {
     padding: 1.5rem;
   }
@@ -791,7 +851,7 @@ onMounted(() => {
     flex-direction: row;
     align-items: flex-start;
   }
-  
+
   .lottery-box:first-child {
     flex: 1;
     max-width: 500px;

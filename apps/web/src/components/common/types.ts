@@ -1,4 +1,4 @@
-import type { Component } from 'vue';
+import type { Component } from 'vue'
 
 /**
  * 表格列配置接口
@@ -105,9 +105,18 @@ export interface RowSelectionConfig {
   /** 选择变化回调 */
   onChange?: (selectedRowKeys: (string | number)[], selectedRows: Record<string, unknown>[]) => void
   /** 全选/取消全选回调 */
-  onSelectAll?: (selected: boolean, selectedRows: Record<string, unknown>[], changeRows: Record<string, unknown>[]) => void
+  onSelectAll?: (
+    selected: boolean,
+    selectedRows: Record<string, unknown>[],
+    changeRows: Record<string, unknown>[],
+  ) => void
   /** 选择/取消选择某行回调 */
-  onSelect?: (record: Record<string, unknown>, selected: boolean, selectedRows: Record<string, unknown>[], nativeEvent: Event) => void
+  onSelect?: (
+    record: Record<string, unknown>,
+    selected: boolean,
+    selectedRows: Record<string, unknown>[],
+    nativeEvent: Event,
+  ) => void
   /** 获取行的唯一标识 */
   getRowKey?: (record: Record<string, unknown>) => string | number
 }
@@ -125,7 +134,11 @@ export interface DataTableEmits {
   /** 筛选变化事件 */
   (e: 'filter-change', filters: FilterInfo[]): void
   /** 行选择变化事件 */
-  (e: 'selection-change', selectedRowKeys: (string | number)[], selectedRows: Record<string, unknown>[]): void
+  (
+    e: 'selection-change',
+    selectedRowKeys: (string | number)[],
+    selectedRows: Record<string, unknown>[],
+  ): void
   /** 行点击事件 */
   (e: 'row-click', record: Record<string, unknown>, index: number, event: Event): void
   /** 行双击事件 */
