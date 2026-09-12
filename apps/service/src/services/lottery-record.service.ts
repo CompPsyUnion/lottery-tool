@@ -1,18 +1,17 @@
-import { DataSource, EntityManager } from 'typeorm'
-import { AppDataSource } from '../utils/database'
-import { LotteryRecord } from '../entities/lottery-record.entity'
+import { DataSource, EntityManager } from 'typeorm';
+import { AppDataSource } from '../utils/database';
+import { LotteryRecord } from '../entities/lottery-record.entity';
 
-const managerOf = (manager?: EntityManager): DataSource | EntityManager => manager ?? AppDataSource
+const managerOf = (manager?: EntityManager): DataSource | EntityManager => manager ?? AppDataSource;
 
 export interface CreateRecordData {
-  activity_id: number
-  lottery_code_id: number
-  prize_id?: number | null
-  is_winner?: boolean
-  operator_id?: number | null
-  ip_address?: string | null
-  user_agent?: string | null
-  is_test?: boolean
+  activity_id: number;
+  lottery_code_id: number;
+  prize_id?: number | null;
+  is_winner?: boolean;
+  operator_id?: number | null;
+  ip_address?: string | null;
+  user_agent?: string | null;
 }
 
 // 原createRecord
@@ -28,8 +27,7 @@ export function createRecord(
     operator_id = null,
     ip_address = null,
     user_agent = null,
-    is_test = false,
-  } = data
+  } = data;
 
   return managerOf(manager).getRepository(LotteryRecord).save({
     activity_id,
@@ -39,66 +37,41 @@ export function createRecord(
     operator_id,
     ip_address,
     user_agent,
-    is_test,
-  })
-}
-
-/**
- * 测试记录 upsert：测试码每次抽奖复用同一条 is_test 记录（不堆积），
- * 重抽时更新结果并重置签字状态（可重新测试签字）。真实码不走此函数。
- */
-export async function upsertDemoRecord(
-  data: CreateRecordData,
-  manager?: EntityManager,
-): Promise<LotteryRecord> {
-  const repo = managerOf(manager).getRepository(LotteryRecord)
-  const existing = await repo.findOneBy({ lottery_code_id: data.lottery_code_id })
-  if (existing) {
-    existing.prize_id = data.prize_id ?? null
-    existing.is_winner = data.is_winner ?? false
-    existing.operator_id = data.operator_id ?? null
-    existing.ip_address = data.ip_address ?? null
-    existing.user_agent = data.user_agent ?? null
-    existing.signature_data = null
-    existing.signed_at = null
-    existing.signature_status = 'unsigned'
-    return repo.save(existing)
-  }
-  return createRecord({ ...data, is_test: true }, manager)
+  });
 }
 
 // 原updateSignature
 export async function updateSignature(
   recordId: number,
   signatureData: {
-    signature_data: string
-    signed_at?: Date
+    signature_data: string;
+    signed_at?: Date;
   },
   manager?: EntityManager,
 ): Promise<LotteryRecord | null> {
-  const repo = managerOf(manager).getRepository(LotteryRecord)
-  const record = await repo.findOneBy({ id: recordId })
+  const repo = managerOf(manager).getRepository(LotteryRecord);
+  const record = await repo.findOneBy({ id: recordId });
   if (!record) {
-    return null
+    return null;
   }
 
-  record.signature_data = signatureData.signature_data
-  record.signed_at = signatureData.signed_at || new Date()
-  record.signature_status = 'signed'
+  record.signature_data = signatureData.signature_data;
+  record.signed_at = signatureData.signed_at || new Date();
+  record.signature_status = 'signed';
 
-  return repo.save(record)
+  return repo.save(record);
 }
 
 // 列表场景剥离大字段：签字 data URL 只通过专用取图接口返回
 export function stripSignatureData(records: LotteryRecord[]): LotteryRecord[] {
   for (const r of records) {
-    delete r.signature_data
+    delete r.signature_data;
   }
-  return records
+  return records;
 }
 
 export const findById = (id: number, manager?: EntityManager): Promise<LotteryRecord | null> =>
-  managerOf(manager).getRepository(LotteryRecord).findOneBy({ id })
+  managerOf(manager).getRepository(LotteryRecord).findOneBy({ id });
 
 /**
  * 原findByActivity：分页联查 lotteryCode/prize/activity/operator。
@@ -107,14 +80,14 @@ export const findById = (id: number, manager?: EntityManager): Promise<LotteryRe
 export async function findByActivity(
   activityId: number,
   options: {
-    page?: number
-    limit?: number
-    winner_only?: boolean
-    participant_name?: string
-    lottery_code?: string
-    keyword?: string
-    start_date?: string
-    end_date?: string
+    page?: number;
+    limit?: number;
+    winner_only?: boolean;
+    participant_name?: string;
+    lottery_code?: string;
+    keyword?: string;
+    start_date?: string;
+    end_date?: string;
   } = {},
 ): Promise<Record<string, unknown>> {
   const {
@@ -126,8 +99,8 @@ export async function findByActivity(
     keyword,
     start_date,
     end_date,
-  } = options
-  const offset = (page - 1) * limit
+  } = options;
+  const offset = (page - 1) * limit;
 
   const qb = AppDataSource.getRepository(LotteryRecord)
     .createQueryBuilder('record')
@@ -135,32 +108,30 @@ export async function findByActivity(
     .leftJoinAndSelect('record.prize', 'prize')
     .leftJoinAndSelect('record.activity', 'activity')
     .leftJoinAndSelect('record.operator', 'operator')
-    .where('record.activity_id = :activityId', { activityId })
-    // 测试记录（测试码 upsert 产物）不进管理端列表
-    .andWhere('record.is_test = false')
+    .where('record.activity_id = :activityId', { activityId });
 
   if (winner_only) {
-    qb.andWhere('record.is_winner = :isWinner', { isWinner: true })
+    qb.andWhere('record.is_winner = :isWinner', { isWinner: true });
   }
 
   if (start_date) {
-    qb.andWhere('record.created_at >= :startDate', { startDate: new Date(start_date) })
+    qb.andWhere('record.created_at >= :startDate', { startDate: new Date(start_date) });
   }
 
   if (end_date) {
-    qb.andWhere('record.created_at <= :endDate', { endDate: new Date(end_date) })
+    qb.andWhere('record.created_at <= :endDate', { endDate: new Date(end_date) });
   }
 
   // 参与者姓名搜索
   if (participant_name) {
     qb.andWhere(`lotteryCode.participant_info->>'name' ILIKE :participantName`, {
       participantName: `%${participant_name}%`,
-    })
+    });
   }
 
   // 抽奖码搜索
   if (lottery_code) {
-    qb.andWhere('lotteryCode.code ILIKE :lotteryCode', { lotteryCode: `%${lottery_code}%` })
+    qb.andWhere('lotteryCode.code ILIKE :lotteryCode', { lotteryCode: `%${lottery_code}%` });
   }
 
   // 关键词搜索
@@ -171,12 +142,12 @@ export async function findByActivity(
         OR lotteryCode.participant_info->>'phone' ILIKE :keyword
         OR lotteryCode.participant_info->>'email' ILIKE :keyword)`,
       { keyword: `%${keyword}%` },
-    )
+    );
   }
 
-  qb.orderBy('record.created_at', 'DESC').skip(offset).take(limit)
+  qb.orderBy('record.created_at', 'DESC').skip(offset).take(limit);
 
-  const [rows, count] = await qb.getManyAndCount()
+  const [rows, count] = await qb.getManyAndCount();
 
   return {
     records: stripSignatureData(rows),
@@ -186,7 +157,7 @@ export async function findByActivity(
       limit: parseInt(String(limit)),
       totalPages: Math.ceil(count / limit),
     },
-  }
+  };
 }
 
 // 原findByOperator
@@ -194,24 +165,23 @@ export async function findByOperator(
   operatorId: number,
   options: { page?: number; limit?: number; activity_id?: number } = {},
 ): Promise<Record<string, unknown>> {
-  const { page = 1, limit = 20, activity_id } = options
-  const offset = (page - 1) * limit
+  const { page = 1, limit = 20, activity_id } = options;
+  const offset = (page - 1) * limit;
 
   const qb = AppDataSource.getRepository(LotteryRecord)
     .createQueryBuilder('record')
     .leftJoinAndSelect('record.lotteryCode', 'lotteryCode')
     .leftJoinAndSelect('record.prize', 'prize')
     .leftJoinAndSelect('record.activity', 'activity')
-    .where('record.operator_id = :operatorId', { operatorId })
-    .andWhere('record.is_test = false')
+    .where('record.operator_id = :operatorId', { operatorId });
 
   if (activity_id) {
-    qb.andWhere('record.activity_id = :activityId', { activityId: activity_id })
+    qb.andWhere('record.activity_id = :activityId', { activityId: activity_id });
   }
 
-  qb.orderBy('record.created_at', 'DESC').skip(offset).take(limit)
+  qb.orderBy('record.created_at', 'DESC').skip(offset).take(limit);
 
-  const [rows, count] = await qb.getManyAndCount()
+  const [rows, count] = await qb.getManyAndCount();
 
   return {
     records: stripSignatureData(rows),
@@ -221,7 +191,7 @@ export async function findByOperator(
       limit: parseInt(String(limit)),
       totalPages: Math.ceil(count / limit),
     },
-  }
+  };
 }
 
 /**
@@ -232,16 +202,15 @@ export async function getWinningStatistics(
   activityId: number,
   options: { start_date?: string; end_date?: string } = {},
 ): Promise<Record<string, unknown>> {
-  const { start_date, end_date } = options
+  const { start_date, end_date } = options;
 
-  const repo = AppDataSource.getRepository(LotteryRecord)
+  const repo = AppDataSource.getRepository(LotteryRecord);
 
-  // 按奖品分组统计（联奖品名；排除测试记录）
+  // 按奖品分组统计（联奖品名）
   const prizeStats = await repo
     .createQueryBuilder('record')
     .innerJoinAndSelect('record.prize', 'prize')
     .where('record.activity_id = :activityId', { activityId })
-    .andWhere('record.is_test = false')
     .andWhere('record.is_winner = :isWinner', { isWinner: true })
     .andWhere(start_date ? 'record.created_at >= :startDate' : '1=1', {
       ...(start_date ? { startDate: new Date(start_date) } : {}),
@@ -254,13 +223,12 @@ export async function getWinningStatistics(
     .addSelect('COUNT(*)', 'count')
     .groupBy('record.prize_id')
     .addGroupBy('prize.name')
-    .getRawMany()
+    .getRawMany();
 
-  // 按日期分组统计（MySQL fn('DATE') → PG ::date；排除测试记录）
+  // 按日期分组统计（MySQL fn('DATE') → PG ::date）
   const dailyStats = await repo
     .createQueryBuilder('record')
     .where('record.activity_id = :activityId', { activityId })
-    .andWhere('record.is_test = false')
     .andWhere('record.is_winner = :isWinner', { isWinner: true })
     .andWhere(start_date ? 'record.created_at >= :startDate' : '1=1', {
       ...(start_date ? { startDate: new Date(start_date) } : {}),
@@ -272,40 +240,32 @@ export async function getWinningStatistics(
     .addSelect('COUNT(*)', 'count')
     .groupBy(`record.created_at::date`)
     .orderBy(`record.created_at::date`, 'ASC')
-    .getRawMany()
+    .getRawMany();
 
-  const totalWinners = await repo.countBy({
-    activity_id: activityId,
-    is_winner: true,
-    is_test: false,
-  })
+  const totalWinners = await repo.countBy({ activity_id: activityId, is_winner: true });
 
   return {
     total_winners: totalWinners,
     prize_statistics: prizeStats,
     daily_statistics: dailyStats,
-  }
+  };
 }
 
 export function getTotalRecords(activityId: number): Promise<number> {
-  return AppDataSource.getRepository(LotteryRecord).countBy({
-    activity_id: activityId,
-    is_test: false,
-  })
+  return AppDataSource.getRepository(LotteryRecord).countBy({ activity_id: activityId });
 }
 
 export function getTotalWinners(activityId: number): Promise<number> {
   return AppDataSource.getRepository(LotteryRecord).countBy({
     activity_id: activityId,
     is_winner: true,
-    is_test: false,
-  })
+  });
 }
 
 // 原hasDrawn
 export async function hasDrawn(lotteryCodeId: number): Promise<boolean> {
-  const record = await AppDataSource.getRepository(LotteryRecord).findOne({
-    where: { lottery_code_id: lotteryCodeId },
-  })
-  return !!record
+  const record = await AppDataSource
+    .getRepository(LotteryRecord)
+    .findOne({ where: { lottery_code_id: lotteryCodeId } });
+  return !!record;
 }

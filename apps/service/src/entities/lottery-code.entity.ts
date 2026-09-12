@@ -7,18 +7,18 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
-} from 'typeorm'
-import { Activity } from './activity.entity'
+} from 'typeorm';
+import { Activity } from './activity.entity';
 
 // 参与者信息
 export interface ParticipantInfo {
-  name?: string
-  phone?: string
-  email?: string
-  [key: string]: unknown
+  name?: string;
+  phone?: string;
+  email?: string;
+  [key: string]: unknown;
 }
 
-export type LotteryCodeStatus = 'unused' | 'used' | 'invalid'
+export type LotteryCodeStatus = 'unused' | 'used' | 'invalid';
 
 @Entity({ name: 'lottery_codes' })
 @Index('uq_lottery_codes_activity_code', ['activity_id', 'code'], { unique: true })
@@ -27,17 +27,17 @@ export class LotteryCode {
     type: 'integer',
     primaryKeyConstraintName: 'pk_lottery_codes',
   })
-  id!: number
+  id!: number;
 
   @Column({ name: 'activity_id', type: 'integer', nullable: false })
-  activity_id!: number
+  activity_id!: number;
 
   @ManyToOne(() => Activity, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'activity_id', foreignKeyConstraintName: 'fk_lottery_codes_activity' })
-  activity!: Activity
+  activity!: Activity;
 
   @Column({ name: 'code', type: 'varchar', length: 50, nullable: false })
-  code!: string
+  code!: string;
 
   @Column({
     name: 'status',
@@ -47,22 +47,18 @@ export class LotteryCode {
     nullable: false,
     default: 'unused',
   })
-  status!: LotteryCodeStatus
-
-  /** 测试专用码：抽奖走完整流程但不扣库存/不置 used/不写记录（一活动至多一个，DB 部分唯一索引保证） */
-  @Column({ name: 'is_test', type: 'boolean', nullable: false, default: false })
-  is_test!: boolean
+  status!: LotteryCodeStatus;
 
   /** 参与者信息：name, phone, email 等 */
   @Column({ name: 'participant_info', type: 'jsonb', nullable: true })
-  participant_info!: ParticipantInfo | null
+  participant_info!: ParticipantInfo | null;
 
   @Column({ name: 'used_at', type: 'timestamp', nullable: true })
-  used_at!: Date | null
+  used_at!: Date | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
-  created_at!: Date
+  created_at!: Date;
 
   @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
-  updated_at!: Date
+  updated_at!: Date;
 }

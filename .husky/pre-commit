@@ -1,3 +1,0 @@
-# 提交前仅检查（不自动修复）：格式或 lint 不合规将阻断提交。
-# 手动修复方式：pnpm lint:fix（ESLint --fix + Prettier --write）
-npx lint-staged

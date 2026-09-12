@@ -59,15 +59,23 @@
 </template>
 
 <script setup lang="ts">
-import { BadgeCheck, ChevronsUpDown, LogOut } from 'lucide-vue-next'
-import { useUserStore } from '@/stores/user'
-import { toast } from 'vue-sonner'
-import { useRouter } from 'vue-router'
+import {
+  BadgeCheck,
+  ChevronsUpDown,
+  LogOut,
+} from 'lucide-vue-next';
+import { useUserStore } from '@/stores/user';
+import { toast } from 'vue-sonner';
+import { useRouter } from 'vue-router';
 
-const router = useRouter()
-const userStore = useUserStore()
+const router = useRouter();
+const userStore = useUserStore();
 
-import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar'
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+} from '../ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -76,8 +84,13 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from '../ui/sidebar'
+} from '../ui/dropdown-menu';
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from '../ui/sidebar';
 
 interface User {
   name: string
@@ -87,13 +100,13 @@ interface User {
 
 defineProps<{
   user: User
-}>()
+}>();
 
-const { isMobile } = useSidebar()
+const { isMobile } = useSidebar();
 
 const handleLogout = () => {
-  userStore.clearToken()
-  toast.success("You've been logged out")
-  router.push({ name: 'Login' })
-}
+  userStore.clearToken();
+  toast.success('You\'ve been logged out');
+  router.push({ name: 'Login' });
+};
 </script>

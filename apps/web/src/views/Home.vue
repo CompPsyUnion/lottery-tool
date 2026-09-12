@@ -3,33 +3,45 @@
     <!-- Hero Section -->
     <section class="hero bg-linear-to-br from-blue-50 to-indigo-100 py-16 px-4">
       <div class="container mx-auto max-w-4xl text-center">
-        <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6">智能抽奖工具</h1>
-        <p class="text-xl md:text-2xl text-gray-600 mb-8">公平、透明、便捷的在线抽奖平台</p>
-
+        <h1 class="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+          智能抽奖工具
+        </h1>
+        <p class="text-xl md:text-2xl text-gray-600 mb-8">
+          公平、透明、便捷的在线抽奖平台
+        </p>
+        
         <!-- 按钮区域 -->
         <div v-if="!showParticipateForm" class="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button size="lg" class="px-8 py-3 text-lg" @click="goToAdmin"> 进入使用 </Button>
-          <Button
-            variant="outline"
-            size="lg"
+          <Button size="lg" class="px-8 py-3 text-lg" @click="goToAdmin">
+            进入使用
+          </Button>
+          <Button 
+            variant="outline" 
+            size="lg" 
             class="px-8 py-3 text-lg"
             @click="showParticipateForm = true"
           >
             参与活动
           </Button>
         </div>
-
+        
         <!-- 参与活动表单 -->
         <div v-else class="max-w-md mx-auto">
           <div class="flex flex-col sm:flex-row gap-4">
-            <Input
-              v-model="activityId"
-              placeholder="请输入主办方提供的活动id进入"
+            <Input 
+              v-model="activityId" 
+              placeholder="请输入主办方提供的活动id进入" 
               class="flex-1 bg-white"
             />
-            <Button @click="participateActivity"> 参与活动 </Button>
+            <Button @click="participateActivity">
+              参与活动
+            </Button>
           </div>
-          <Button variant="ghost" class="mt-2 text-sm" @click="showParticipateForm = false">
+          <Button 
+            variant="ghost" 
+            class="mt-2 text-sm"
+            @click="showParticipateForm = false"
+          >
             返回
           </Button>
         </div>
@@ -39,11 +51,15 @@
     <!-- 介绍部分 -->
     <section class="features py-16 px-4 bg-white">
       <div class="container mx-auto max-w-6xl">
-        <h2 class="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-12">功能特色</h2>
+        <h2 class="text-3xl md:text-4xl font-bold text-center text-gray-900 mb-12">
+          功能特色
+        </h2>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> 🎯 公平抽奖 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                🎯 公平抽奖
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-600">
@@ -51,10 +67,12 @@
               </p>
             </CardContent>
           </Card>
-
+          
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> 📱 移动友好 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                📱 移动友好
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-600">
@@ -62,10 +80,12 @@
               </p>
             </CardContent>
           </Card>
-
+          
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> ⚡ 快速便捷 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                ⚡ 快速便捷
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-600">
@@ -73,10 +93,12 @@
               </p>
             </CardContent>
           </Card>
-
+          
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> 🔒 数据安全 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                🔒 数据安全
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-600">
@@ -84,10 +106,12 @@
               </p>
             </CardContent>
           </Card>
-
+          
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> 📊 结果透明 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                📊 结果透明
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <p class="text-gray-600">
@@ -95,13 +119,17 @@
               </p>
             </CardContent>
           </Card>
-
+          
           <Card class="p-6 hover:shadow-lg transition-shadow">
             <CardHeader>
-              <CardTitle class="text-xl font-semibold text-gray-900"> 🎨 自定义设置 </CardTitle>
+              <CardTitle class="text-xl font-semibold text-gray-900">
+                🎨 自定义设置
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <p class="text-gray-600">支持多种抽奖模式和自定义设置，满足不同场景的抽奖需求。</p>
+              <p class="text-gray-600">
+                支持多种抽奖模式和自定义设置，满足不同场景的抽奖需求。
+              </p>
             </CardContent>
           </Card>
         </div>
@@ -116,53 +144,29 @@
           <div>
             <h3 class="text-lg font-semibold text-gray-900 mb-4">不断同学</h3>
             <ul class="space-y-2">
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">主页</a>
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">抽奖工具</a>
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">实验室</a>
-              </li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">主页</a></li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">抽奖工具</a></li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">实验室</a></li>
             </ul>
           </div>
-
+          
           <!-- 友情链接 -->
           <div>
             <h3 class="text-lg font-semibold text-gray-900 mb-4">友情链接</h3>
             <ul class="space-y-2">
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴A</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴B</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴C</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴D</a
-                >
-              </li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">合作伙伴A</a></li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">合作伙伴B</a></li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">合作伙伴C</a></li>
+              <li><a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">合作伙伴D</a></li>
             </ul>
           </div>
         </div>
-
+        
         <!-- ICP备案号 -->
         <div class="border-t border-gray-200 pt-8 text-center">
           <p class="text-gray-500 text-sm">
-            © 2025 不断同学创意网络科技工作室. MIT Licence. |
-            <a href="#" class="hover:text-blue-600 transition-colors"
-              >ICP备案号：京ICP备XXXXXXXX号</a
-            >
+            © 2025 不断同学创意网络科技工作室. MIT Licence. | 
+            <a href="#" class="hover:text-blue-600 transition-colors">ICP备案号：京ICP备XXXXXXXX号</a>
           </p>
         </div>
       </div>
@@ -171,23 +175,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 // 路由实例
-const router = useRouter()
+const router = useRouter();
 
 // 响应式数据
-const showParticipateForm = ref(false)
-const activityId = ref('')
+const showParticipateForm = ref(false);
+const activityId = ref('');
 
 // 跳转到管理页面
 const goToAdmin = () => {
-  router.push('/admin')
-}
+  router.push('/admin');
+};
 
 // 参与活动
 const participateActivity = () => {
@@ -195,9 +199,9 @@ const participateActivity = () => {
     router.push({
       path: '/lottery',
       query: { activityId: activityId.value.trim() },
-    })
+    });
   }
-}
+};
 </script>
 
 <style scoped>

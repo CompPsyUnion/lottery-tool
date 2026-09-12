@@ -3,16 +3,13 @@
 🌍 中文版 | [English](README.md)
 
 一个支持多种抽奖模式的完整抽奖系统后端服务，基于 Node.js + Express.js + PostgreSQL 构建。
+提供符合OpenAPI规范的json协议文档，方便前端开发人员查看和测试API。
 
 ## 功能特点
 
 - 🎯 **多种抽奖模式**：支持线上抽奖和线下抽奖
-- 🔄 **活动状态机**：`draft → ready → active → ended`，60 秒定时任务到点自动开始/结束（流转受矩阵约束，`PATCH /admin/activities/:id/status`）
-- 🎫 **抽奖码系统**：支持多种格式的抽奖码生成
-- 🧪 **测试抽奖码**：每个活动一个幂等测试码，抽奖走完整流程（含签字）但不扣库存、不产生真实记录
-- ✍️ **签字确认**：线下抽奖可选签字确认（图片存库），记录页支持补签
-- 📧 **邮箱验证码**：注册验证码经 email-poster POST webhook 发送（无 SMTP），通道在超管设置页配置
 - 🔐 **权限管理**：超级管理员和普通管理员角色
+- 🎫 **抽奖码系统**：支持多种格式的抽奖码生成
 - 🔗 **Webhook支持**：第三方系统可通过Webhook添加抽奖码
 - 📊 **完整统计**：详细的抽奖记录和统计数据
 - 🛡️ **安全可靠**：JWT认证、操作日志、错误处理
@@ -20,7 +17,7 @@
 ## 技术栈
 
 - **后端框架**：Node.js + Express.js
-- **数据库**：PostgreSQL 18+
+- **数据库**：PostgreSQL 16+
 - **ORM**：TypeORM 1.1
 - **认证**：JWT
 - **日志**：Winston
@@ -30,8 +27,8 @@
 
 ### 1. 环境要求
 
-- Node.js >= 20
-- PostgreSQL >= 18
+- Node.js >= 16.0.0
+- PostgreSQL >= 16
 - npm 或 yarn
 
 ### 2. 安装依赖
@@ -42,7 +39,7 @@ pnpm install
 
 ### 3. 启动服务（无安装向导）
 
-首次启动时迁移会自动建表。**首位通过 `/auth/register` 注册的用户自动成为超级管理员**；此后公开注册（默认开启，可由超管在系统设置中关闭）需通过邮箱验证码，或由超管令牌直接创建账户。
+首次启动时迁移会自动建表。**首位通过 `/auth/register` 注册的用户自动成为超级管理员**；此后注册需要超级管理员令牌。
 
 ```bash
 # 生产模式
@@ -82,22 +79,22 @@ pnpm test
 
 系统支持以下抽奖码格式：
 
-| 格式代码                | 描述             | 示例         |
-| ----------------------- | ---------------- | ------------ |
-| `4_digit_number`        | 4位纯数字        | 1234         |
-| `8_digit_number`        | 8位纯数字        | 12345678     |
-| `8_digit_alphanumeric`  | 8位数字+小写字母 | 12a34b56     |
-| `12_digit_number`       | 12位纯数字       | 123456789012 |
-| `12_digit_alphanumeric` | 12位数字+字母    | 12a34B56c78D |
+| 格式代码 | 描述 | 示例 |
+| --------- | ------ | ------ |
+| `4_digit_number` | 4位纯数字 | 1234 |
+| `8_digit_number` | 8位纯数字 | 12345678 |
+| `8_digit_alphanumeric` | 8位数字+小写字母 | 12a34b56 |
+| `12_digit_number` | 12位纯数字 | 123456789012 |
+| `12_digit_alphanumeric` | 12位数字+字母 | 12a34B56c78D |
 
 ## API使用示例
 
-路由定义见 `src/routes/`（服务直接挂在根路径，如 `POST /auth/login`，无 `/api` 前缀）。
+具体请参考API文档, 并已提供OpenAPI协议，你可以将``openapi.json`` 导入到Swagger UI更多其他API工具中进行测试。
 
 ### 管理员登录
 
 ```bash
-curl -X POST http://localhost:3000/auth/login \
+curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "admin",
@@ -108,7 +105,7 @@ curl -X POST http://localhost:3000/auth/login \
 ### 创建活动
 
 ```bash
-curl -X POST http://localhost:3000/admin/activities \
+curl -X POST http://localhost:3000/api/admin/activities \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -127,7 +124,7 @@ curl -X POST http://localhost:3000/admin/activities \
 ### 批量创建抽奖码
 
 ```bash
-curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/batch \
+curl -X POST http://localhost:3000/api/admin/activities/1/lottery-codes/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -d '{
@@ -138,29 +135,11 @@ curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/batch \
 ### 用户抽奖
 
 ```bash
-curl -X POST http://localhost:3000/lottery/activities/1/draw \
+curl -X POST http://localhost:3000/api/lottery/activities/1/draw \
   -H "Content-Type: application/json" \
   -d '{
     "lottery_code": "12345678"
   }'
-```
-
-### 活动状态流转
-
-活动创建后为 `draft`，经 `draft → ready → active → ended` 流转（受矩阵约束，
-`ended` 为终态、`ready` 可撤回）。定时任务（60 秒一轮，启动即补扫）在
-`start_time` 到点后自动开始（未设置开始时间则立即开始），`end_time` 到点自动结束。
-
-```bash
-# 发布（draft → ready）；另有 ready → active（立即开始）、active → ended、ready → draft（撤回）
-curl -X PATCH http://localhost:3000/admin/activities/1/status \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_TOKEN" \
-  -d '{ "status": "ready" }'
-
-# 幂等获取测试抽奖码（每活动一个；用它抽奖不扣库存、不产生真实记录）
-curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
-  -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ## Webhook集成
@@ -168,14 +147,14 @@ curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
 ### 获取Webhook信息
 
 ```bash
-curl -X GET http://localhost:3000/admin/activities/1/webhook-info \
+curl -X GET http://localhost:3000/api/admin/activities/1/webhook-info \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
 ### 通过Webhook添加抽奖码
 
 ```bash
-curl -X POST http://localhost:3000/webhook/activities/WEBHOOK_ID/lottery-codes \
+curl -X POST http://localhost:3000/api/webhook/activities/WEBHOOK_ID/lottery-codes \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer WEBHOOK_TOKEN" \
   -d '{
@@ -196,23 +175,22 @@ apps/service/
 │   ├── app.ts                 # 应用入口（启动即跑迁移）
 │   ├── entities/              # TypeORM 实体（表结构唯一来源）
 │   ├── migrations/            # 自动生成的迁移 + index.ts barrel
-│   ├── services/              # 业务服务（原 model 静态方法；含 activity-status-scheduler 定时流转）
+│   ├── services/              # 业务服务（原 model 静态方法）
 │   ├── middleware/
 │   │   ├── auth.ts           # 认证中间件
-│   │   ├── error-handler.ts  # 错误处理
-│   │   └── operation-logger.ts # 操作日志
+│   │   ├── errorHandler.ts   # 错误处理
+│   │   └── operationLogger.ts # 操作日志
 │   ├── routes/               # 路由
-│   │   ├── auth.ts          # 认证路由（首位注册即超管；注册邮箱验证码）
+│   │   ├── auth.ts          # 认证路由（首位注册即超管）
 │   │   ├── admin/           # 管理员路由
-│   │   ├── lottery.ts       # 抽奖路由（draw/offline-draw/签字）
+│   │   ├── lottery.ts       # 抽奖路由
 │   │   ├── webhook.ts       # Webhook路由
-│   │   └── system.ts        # 系统管理路由（邮件通道配置等）
+│   │   └── system.ts        # 系统管理路由
 │   └── utils/
 │       ├── database.ts      # DataSource（PG 连接 + 迁移执行）
 │       ├── logger.ts
-│       ├── custom-error.ts
-│       ├── mail-theme.ts    # 邮件 HTML 模板（email-poster 内置模板 + 站点主题）
-│       └── lottery-code-generator.ts
+│       ├── customError.ts
+│       └── lotteryCodeGenerator.ts
 ├── scripts/                  # 迁移 CLI + API 冒烟（tsup 构建到 scripts/dist）
 ├── tsup.config.ts / tsup.dev.config.ts
 ├── docker-compose.yml        # 含 PostgreSQL 18 服务
@@ -240,31 +218,109 @@ DB_PASSWORD=your_password
 JWT_SECRET=your_secret_key
 JWT_EXPIRES_IN=24h
 
-# 超级管理员引导（可选；库为空时启动自动创建）
-SUPER_ADMIN_USERNAME=admin
-SUPER_ADMIN_PASSWORD=your_password
-SUPER_ADMIN_EMAIL=admin@example.com
-
 # 日志配置
 LOG_LEVEL=info
 LOG_FILE=logs/app.log
 ```
 
-注册验证码的邮件通道在超管设置页运行时配置（email-poster POST webhook，无 SMTP 环境变量）。
-
 ## Docker 部署说明
 
-容器启动时自动应用迁移；数据库连接失败不退出（等待依赖就绪）。完整的镜像与
-Compose 部署步骤（`.env` 优先、PostgreSQL 默认内网）见
-[docs/DEPLOY_BACKEND.md](../../docs/DEPLOY_BACKEND.md)。
+### 问题解决
 
-快速开始：
+应用无交互式安装步骤：容器启动时自动应用迁移，随后通过 `/auth/register` 注册首位超级管理员即可。
+
+### 解决方案
+
+#### 1. 启动逻辑
+
+- 容器启动时自动应用数据库迁移
+- 数据库连接失败时不会立即退出（等待依赖就绪）
+
+#### 2. 使用方法
+
+#### 方法一：使用 Docker Compose（推荐）
+
+1. 修改 `docker-compose.yml` 中的数据库配置：
+
+```yaml
+environment:
+  DB_HOST: your-actual-database-host
+  DB_USER: your-actual-db-user
+  DB_PASSWORD: your-actual-db-password
+```
+
+1. 启动服务：
 
 ```bash
-cd apps/service
-docker compose up -d          # 起 PostgreSQL 18 + 后端（GHCR 镜像）
-curl http://localhost:3000/health
+docker-compose up -d
 ```
+
+1. 查看日志：
+
+```bash
+docker-compose logs -f lottery-backend
+```
+
+#### 方法二：单独使用 Docker
+
+1. 构建镜像：
+
+```bash
+docker build -t lottery-backend .
+```
+
+1. 运行容器（需要设置环境变量）：
+
+```bash
+docker run -d \
+  --name lottery-backend \
+  -p 3000:3000 \
+  -e DB_HOST=your-database-host \
+  -e DB_USER=your-db-user \
+  -e DB_PASSWORD=your-db-password \
+  -e JWT_SECRET=your-jwt-secret \
+  lottery-backend
+```
+
+#### 3. 环境变量说明
+
+必需的环境变量：
+
+- `DB_HOST`: 数据库主机地址
+- `DB_USER`: 数据库用户名
+- `DB_PASSWORD`: 数据库密码
+- `DB_NAME`: 数据库名称（可选，默认：lottery_system）
+- `JWT_SECRET`: JWT密钥
+
+可选的环境变量：
+
+- `DB_PORT`: 数据库端口（默认：5432）
+- `PORT`: 应用端口（默认：3000）
+- `NODE_ENV`: 环境（默认：production）
+- `CORS_ORIGIN`: CORS来源（默认：*）
+
+#### 4. 测试部署
+
+启动后，可以通过以下方式测试：
+
+```bash
+# 健康检查
+curl http://localhost:3000/health
+
+# 查看容器状态
+docker ps
+
+# 查看日志
+docker logs lottery-backend
+```
+
+#### 5. 故障排除
+
+如果容器仍然启动失败：
+
+1. 检查环境变量是否正确设置
+2. 确保数据库服务可访问
+3. 查看详细日志：`docker logs lottery-backend`
 
 ## 开发说明
 
