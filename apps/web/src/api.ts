@@ -518,26 +518,22 @@ export const adminPrizeApi = {
     })
   },
 
-  // 获取奖品详情
-  async getPrize(activityId: number, prizeId: number): Promise<{ prize: Prize }> {
-    return apiFetch(`/admin/activities/${activityId}/prizes/${prizeId}`)
+  // 获取奖品详情（后端路由：/admin/prizes/:id）
+  async getPrize(prizeId: number): Promise<{ prize: Prize }> {
+    return apiFetch(`/admin/prizes/${prizeId}`)
   },
 
-  // 更新奖品信息
-  async updatePrize(
-    activityId: number,
-    prizeId: number,
-    data: UpdatePrizeRequest,
-  ): Promise<{ prize: Prize }> {
-    return apiFetch(`/admin/activities/${activityId}/prizes/${prizeId}`, {
+  // 更新奖品信息（后端路由：/admin/prizes/:id）
+  async updatePrize(prizeId: number, data: UpdatePrizeRequest): Promise<{ prize: Prize }> {
+    return apiFetch(`/admin/prizes/${prizeId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     })
   },
 
-  // 删除奖品
-  async deletePrize(activityId: number, prizeId: number): Promise<void> {
-    return apiFetch(`/admin/activities/${activityId}/prizes/${prizeId}`, {
+  // 删除奖品（后端路由：/admin/prizes/:id）
+  async deletePrize(prizeId: number): Promise<void> {
+    return apiFetch(`/admin/prizes/${prizeId}`, {
       method: 'DELETE',
     })
   },

@@ -30,6 +30,7 @@ export interface ActivitySettings {
     | '12_digit_alphanumeric'
   allow_duplicate_phone?: boolean
   require_signature?: boolean
+  lottery_strategy?: 'probability' | 'guaranteed'
   /** 金山表单接入（可选）：字段 qid 映射 / 绑定验证码 / 报名成功邮件通知 */
   kdocs_field_map?: KdocsFieldMap
   kdocs_bind_code?: string
@@ -65,12 +66,16 @@ export interface Activity {
 
 export interface Prize {
   id: number
+  activity_id?: number
   name: string
-  description?: string
+  description?: string | null
   total_quantity: number
   remaining_quantity: number
-  probability: number
-  sort_order: number
+  /** 后端 numeric 列经 pg 驱动返回字符串，使用前请 Number()/parseFloat 转换 */
+  probability: number | string
+  sort_order?: number | null
+  created_at?: string
+  updated_at?: string
 }
 
 export interface LotteryCode {

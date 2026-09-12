@@ -323,6 +323,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { setActivityName } from '@/composables/useBreadcrumb'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
@@ -358,6 +359,8 @@ const router = useRouter()
 
 // 判断是否为编辑模式
 const isEditMode = computed(() => !!route.params.id)
+
+
 const activityId = computed(() => (route.params.id ? Number(route.params.id) : null))
 
 // 表单验证规则
@@ -484,6 +487,8 @@ const loadActivity = async () => {
     })
     selectedStatus.value = activity.status
     originalStatus.value = activity.status
+    // 向面包屑提供活动名（Admin > Activities > [活动名] > Edit）
+    setActivityName(activity.name || '')
   } catch (error) {
     console.error('加载活动数据失败:', error)
     toast.error('加载活动数据失败')

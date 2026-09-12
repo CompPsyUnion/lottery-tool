@@ -3,7 +3,7 @@
     <PageTitle title="Activities" />
 
     <!-- 筛选和搜索栏 -->
-    <div class="flex items-center justify-between gap-4">
+    <div class="flex items-center justify-between gap-4 flex-wrap">
       <div class="flex items-center gap-4">
         <!-- 搜索框 -->
         <div class="relative">

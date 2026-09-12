@@ -36,6 +36,11 @@ const totalPages = computed(() => {
   return Math.ceil(props.pagination.total / props.pagination.pageSize)
 })
 
+// 表格最小宽度 = 列宽总和（窄视口下表格区块内横向滚动，页面整体不溢出）
+const tableMinWidth = computed(() =>
+  props.columns.reduce((sum, c) => sum + (parseInt(c.width || c.minWidth || '0', 10) || 0), 0),
+)
+
 // 处理页码变化
 const handlePageChange = (page: number) => {
   emits('page-change', page)
@@ -68,10 +73,10 @@ const renderCellContent = (column: TableColumn, record: Record<string, unknown>,
 </script>
 
 <template>
-  <div class="data-table-container">
+  <div class="data-table-container min-w-0">
     <!-- 表格主体 -->
-    <div class="rounded-md border">
-      <Table>
+    <div class="rounded-md border overflow-x-auto min-w-0">
+      <Table :style="{ minWidth: tableMinWidth + 'px' }">
         <!-- 表头 -->
         <TableHeader>
           <TableRow>

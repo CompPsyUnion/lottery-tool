@@ -190,7 +190,9 @@
           </div>
         </div>
         <div class="flex gap-2">
-          <Button variant="outline"> 管理奖品 </Button>
+          <Button variant="outline" @click="router.push(`/admin/activities/prizes/${activityId}`)">
+            管理奖品
+          </Button>
         </div>
       </div>
 
@@ -248,7 +250,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, h } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import { setActivityName } from '@/composables/useBreadcrumb'
 import { useDebounceFn } from '@vueuse/core'
 import PageTitle from '@/components/ui/text/pageTitle.vue'
 import NumberCard from '@/components/admin/dashboard/numberCard.vue'
@@ -265,7 +268,9 @@ import type { Activity, Prize, LotteryRecord, ActivityWebhookInfo } from '@/type
 import type { TableColumn } from '@/components/common/types'
 
 const route = useRoute()
+const router = useRouter()
 const activityId = Number(route.params.id)
+
 
 // 响应式数据
 const activity = ref<Activity | null>(null)
@@ -404,6 +409,7 @@ const fetchActivity = async () => {
   try {
     const response = await API.adminActivity.getActivity(activityId)
     activity.value = response.activity
+    setActivityName(response.activity?.name || '')
   } catch {
     // 获取活动详情失败
     activity.value = null
