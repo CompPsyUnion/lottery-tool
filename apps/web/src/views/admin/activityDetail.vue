@@ -54,8 +54,12 @@
           </template>
           <span v-else class="text-xs text-muted-foreground self-center"> 活动已结束（终态） </span>
 
-          <!-- 抽奖入口（独立于流转：任意状态可用） -->
+          <!-- 编辑与抽奖入口（独立于流转：任意状态可用） -->
           <div class="flex gap-2 border-l pl-4 ml-2">
+            <Button variant="outline" @click="goEdit">
+              <SquarePen class="mr-1 h-4 w-4" />
+              编辑
+            </Button>
             <Button variant="outline" @click="showDemoDialog = true">
               <Play class="mr-1 h-4 w-4" />
               抽奖页面测试
@@ -259,7 +263,17 @@ import DataTable from '@/components/common/DataTable.vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Package, Gift, Search, Ticket, Eye, Play, ExternalLink, PenLine } from 'lucide-vue-next'
+import {
+  Package,
+  Gift,
+  Search,
+  Ticket,
+  Eye,
+  Play,
+  ExternalLink,
+  PenLine,
+  SquarePen,
+} from 'lucide-vue-next'
 import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
 import { API } from '@/api'
@@ -454,7 +468,10 @@ const handleTransition = async (target: 'draft' | 'ready' | 'active' | 'ended') 
   }
 }
 
-// ---- 抽奖入口 ----
+// ---- 编辑与抽奖入口 ----
+const goEdit = () => {
+  router.push(`/admin/activities/edit/${activityId}`)
+}
 const showDemoDialog = ref(false)
 const openLotteryPage = () => {
   window.open(`${location.origin}/lottery?activityId=${activityId}`, '_blank')
