@@ -25,6 +25,43 @@ const validateRequest = (req: Request, res: Response, next: NextFunction): void 
 }
 
 /**
+ * @route   GET /api/lottery/activities
+ * @desc    公开的可参与活动列表（进行中 + 线上模式；首页「参与活动」直接点入）
+ * @access  Public
+ */
+router.get('/activities', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activities = await AppDataSource.getRepository(Activity)
+      .createQueryBuilder('activity')
+      .where('activity.status = :status', { status: 'active' })
+      .andWhere('activity.lottery_mode = :mode', { mode: 'online' })
+      .orderBy('activity.created_at', 'DESC')
+      .getMany()
+
+    // 时间窗过滤（active 但未到开始/已过结束的不列出；null 安全判定复用共享逻辑）
+    const open = activities.filter(
+      (activity) => ActivityService.getActivityOpenState(activity).open === true,
+    )
+
+    // 只返回公开字段（不含 settings / webhook 凭据）
+    res.json({
+      success: true,
+      data: {
+        activities: open.map((activity) => ({
+          id: activity.id,
+          name: activity.name,
+          description: activity.description,
+          start_time: activity.start_time,
+          end_time: activity.end_time,
+        })),
+      },
+    })
+  } catch (error) {
+    next(error)
+  }
+})
+
+/**
  * @route   GET /api/lottery/activities/:id
  * @desc    获取活动的抽奖信息（公开接口）
  * @access  Public

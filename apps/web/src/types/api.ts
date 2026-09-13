@@ -121,6 +121,15 @@ export interface Pagination {
   totalPages: number
 }
 
+/** 公开可参与活动摘要（GET /lottery/activities：进行中 + 线上模式，仅公开字段） */
+export interface OpenActivitySummary {
+  id: number
+  name: string
+  description?: string | null
+  start_time?: string | null
+  end_time?: string | null
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean
   data?: T

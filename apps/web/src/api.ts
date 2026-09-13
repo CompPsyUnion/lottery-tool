@@ -30,6 +30,7 @@ import type {
   UploadSignatureRequest,
   UploadSignatureResponse,
   ActivityWebhookInfo,
+  OpenActivitySummary,
 } from './types/api'
 
 // API 基础配置
@@ -217,6 +218,11 @@ export const authApi = {
 
 // 抽奖模块 API（公开接口）
 export const lotteryApi = {
+  // 公开的可参与活动列表（进行中 + 线上模式）
+  async listOpenActivities(): Promise<{ activities: OpenActivitySummary[] }> {
+    return apiFetch('/lottery/activities', {}, false)
+  },
+
   // 获取活动抽奖信息
   async getActivity(id: number): Promise<{ activity: Activity; prizes: Prize[] }> {
     return apiFetch(`/lottery/activities/${id}`, {}, false)
