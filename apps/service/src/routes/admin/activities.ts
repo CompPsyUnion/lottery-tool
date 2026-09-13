@@ -597,19 +597,26 @@ router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next:
 const resolveBaseUrl = (req: Request): string => {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '')
 
-  // 协议链：X-Forwarded-Proto → X-Forwarded-Scheme → RFC7239 Forwarded；
-  // 均缺失时按主机启发式——公网域名 https（公网服务均为 TLS，明文也会被 308），
-  // 本机/内网 http（局域网明文部署）。不用 req.protocol：代理未透传时它恒为 http，
-  // 会压掉公网 https 兜底
-  const headerProto =
-    req.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
-    req.get('x-forwarded-scheme')?.split(',')[0]?.trim() ||
-    req.get('forwarded')?.match(/proto=(\w+)/i)?.[1]
+  // 域名：转发头 / Host——反向代理保留 Host，前后端分域部署时也是 API 真实域名
   const hostname = (
     req.get('x-forwarded-host')?.split(',')[0]?.trim() ||
     req.get('host') ||
     ''
   ).toLowerCase()
+
+  // 协议链：Origin 的 scheme → X-Forwarded-Proto → X-Forwarded-Scheme → RFC7239
+  // Forwarded → 主机启发式。Origin 最优先：浏览器视角的终端协议不会被中间层
+  // 污染（http 回源链会把 X-Forwarded-Proto 改写为 http）；
+  // 域名不用 Origin 的——那可能是前端（SPA）域名，webhook 打过去到不了后端
+  const originProto = req
+    .get('origin')
+    ?.match(/^https?:\/\//i)?.[0]
+    ?.replace('://', '')
+  const headerProto =
+    originProto ||
+    req.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    req.get('x-forwarded-scheme')?.split(',')[0]?.trim() ||
+    req.get('forwarded')?.match(/proto=(\w+)/i)?.[1]
   const isLocalHost =
     hostname === '' ||
     hostname.startsWith('localhost') ||
@@ -622,6 +629,7 @@ const resolveBaseUrl = (req: Request): string => {
 
   if (hostname) return `${proto}://${hostname}`
 
+  // 无任何主机信息时才整取 Origin
   const origin = req.get('origin')
   if (origin) return origin.replace(/\/+$/, '')
 

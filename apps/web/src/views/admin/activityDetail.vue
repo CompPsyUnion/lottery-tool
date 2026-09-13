@@ -71,89 +71,89 @@
 
     <!-- Webhook 接入卡（第三方表单 / 系统对接） -->
     <div v-if="webhookInfo" class="rounded-lg border p-4">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div class="min-w-0 flex-1 space-y-4">
+      <div class="space-y-4">
+        <!-- 标题行：重新生成在右上角与标题同行，不单独占列 -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium">Webhook 接入</span>
             <span class="text-xs text-muted-foreground">第三方表单 / 系统对接</span>
           </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            :disabled="regenerating"
+            @click="handleRegenerateToken"
+          >
+            {{ regenerating ? '生成中...' : '重新生成 Token' }}
+          </Button>
+        </div>
 
-          <!-- Token（默认掩码） -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">访问 Token</div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                {{ showToken ? webhookInfo.webhook_token : '••••••••••••••••••••••••' }}
-              </code>
-              <Button variant="outline" size="sm" class="shrink-0" @click="showToken = !showToken">
-                {{ showToken ? '隐藏' : '显示' }}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.webhook_token, 'Token 已复制')"
-              >
-                复制
-              </Button>
-            </div>
-          </div>
-
-          <!-- 批量接码端点 -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">
-              批量添加抽奖码端点（请求头 Authorization: Bearer &lt;Token&gt;）
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                POST {{ webhookInfo.webhook_url }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.webhook_url, '端点地址已复制')"
-              >
-                复制
-              </Button>
-            </div>
-          </div>
-
-          <!-- 金山表单端点（token 已内嵌，可直接粘贴） -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">
-              金山表单端点（token 已含在地址中，直接粘贴到表单 Webhook 配置即可）
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                {{ showToken ? webhookInfo.kdocs_url : maskedKdocsUrl }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.kdocs_url, '金山表单端点已复制')"
-              >
-                复制
-              </Button>
-            </div>
+        <!-- Token（默认掩码） -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">访问 Token</div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              {{ showToken ? webhookInfo.webhook_token : '••••••••••••••••••••••••' }}
+            </code>
+            <Button variant="outline" size="sm" class="shrink-0" @click="showToken = !showToken">
+              {{ showToken ? '隐藏' : '显示' }}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.webhook_token, 'Token 已复制')"
+            >
+              复制
+            </Button>
           </div>
         </div>
 
-        <Button
-          variant="destructive"
-          class="shrink-0"
-          :disabled="regenerating"
-          @click="handleRegenerateToken"
-        >
-          {{ regenerating ? '生成中...' : '重新生成 Token' }}
-        </Button>
+        <!-- 批量接码端点 -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">
+            批量添加抽奖码端点（请求头 Authorization: Bearer &lt;Token&gt;）
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              POST {{ webhookInfo.webhook_url }}
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.webhook_url, '端点地址已复制')"
+            >
+              复制
+            </Button>
+          </div>
+        </div>
+
+        <!-- 金山表单端点（token 已内嵌，可直接粘贴） -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">
+            金山表单端点（token 已含在地址中，直接粘贴到表单 Webhook 配置即可）
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              {{ showToken ? webhookInfo.kdocs_url : maskedKdocsUrl }}
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.kdocs_url, '金山表单端点已复制')"
+            >
+              复制
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
 
