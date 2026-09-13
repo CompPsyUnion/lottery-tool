@@ -271,7 +271,6 @@ const route = useRoute()
 const router = useRouter()
 const activityId = Number(route.params.id)
 
-
 // 响应式数据
 const activity = ref<Activity | null>(null)
 const prizes = ref<Prize[]>([])

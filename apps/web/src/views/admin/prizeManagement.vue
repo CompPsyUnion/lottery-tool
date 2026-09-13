@@ -1,6 +1,9 @@
 <template>
   <div class="space-y-6">
-    <PageTitle :title="'奖品管理'" :sub-title="activityName ? `活动：${activityName}` : undefined" />
+    <PageTitle
+      :title="'奖品管理'"
+      :sub-title="activityName ? `活动：${activityName}` : undefined"
+    />
 
     <!-- 抽奖策略提示 -->
     <div
@@ -28,7 +31,8 @@
           ，概率总和 {{ (probabilityTotal * 100).toFixed(2) }}%<span
             v-if="probabilityTotal > 1"
             class="text-red-600 font-medium"
-            >（超过 100%，需调整）</span>
+            >（超过 100%，需调整）</span
+          >
         </template>
       </div>
       <Button @click="openCreateDialog">

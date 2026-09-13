@@ -32,7 +32,9 @@ const crumbs = computed<Crumb[]>(() => {
     if (seg.startsWith('/')) {
       acc = seg
     } else if (seg) {
-      acc = acc ? `${acc.replace(/\/$/, '')}/${seg.replace(/^\//, '')}` : `/${seg.replace(/^\//, '')}`
+      acc = acc
+        ? `${acc.replace(/\/$/, '')}/${seg.replace(/^\//, '')}`
+        : `/${seg.replace(/^\//, '')}`
     }
     const name = nameOf(m)
 

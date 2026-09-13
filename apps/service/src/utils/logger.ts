@@ -40,13 +40,12 @@ const logger = winston.createLogger({
   ],
 })
 
-// 在开发环境下同时输出到控制台
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(
-    new winston.transports.Console({
-      format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
-    }),
-  )
-}
+// 控制台输出始终开启：Docker 部署下 stdout 即 docker logs（按 NODE_ENV 关闭会让
+// 生产环境的 error/warn 在容器日志里消失，只落容器内文件，排障不可见）
+logger.add(
+  new winston.transports.Console({
+    format: winston.format.combine(winston.format.colorize(), winston.format.simple()),
+  }),
+)
 
 export default logger

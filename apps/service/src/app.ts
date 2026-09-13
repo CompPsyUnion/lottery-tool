@@ -5,6 +5,7 @@ import rateLimit from 'express-rate-limit'
 import dotenv from 'dotenv'
 import { initDataSource, AppDataSource } from './utils/database'
 import { redactUrlToken } from './utils/redact-url'
+import logger from './utils/logger'
 import { seedSuperAdminFromEnv } from './services/user.service'
 import { startScheduler } from './services/activity-status-scheduler'
 import errorHandler from './middleware/error-handler'
@@ -50,8 +51,19 @@ export const createApp = async (): Promise<void> => {
   // webhook 面也限流（query token 鉴权可被暴力尝试，且直接触发 DB 查询）
   app.use('/webhook', limiter)
 
-  // 解析中间件
-  app.use(express.json({ limit: '10mb' }))
+  // 解析中间件（webhook 面对非法 JSON 容错：按空载荷处理走跳过/绑定回退路径，
+  // 避免厂商探测因 body 解析失败拿到 400 导致绑定失败）
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    express.json({ limit: '10mb' })(req, res, (err?: unknown) => {
+      if (err && req.path.startsWith('/webhook')) {
+        logger.warn(`webhook 载荷 JSON 解析失败，按空载荷处理：${(err as Error).message}`)
+        req.body = {}
+        next()
+        return
+      }
+      next(err)
+    })
+  })
   app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
   // 日志中间件（token 查询参数脱敏；响应完成后记录，带状态码便于排查厂商对接。

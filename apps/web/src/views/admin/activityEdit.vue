@@ -360,7 +360,6 @@ const router = useRouter()
 // 判断是否为编辑模式
 const isEditMode = computed(() => !!route.params.id)
 
-
 const activityId = computed(() => (route.params.id ? Number(route.params.id) : null))
 
 // 表单验证规则
