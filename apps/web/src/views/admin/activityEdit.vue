@@ -33,7 +33,9 @@
           </FormItem>
         </FormField>
 
-        <FormField v-slot="{ field: componentField }" name="lottery_mode">
+        <!-- RadioGroup 须用 slot 的 componentField（含 modelValue 的组件包）；
+             原生 field 包无 modelValue，RadioGroup 会退化为非受控、setValues 回显失效 -->
+        <FormField v-slot="{ componentField }" name="lottery_mode">
           <FormItem>
             <FormLabel>抽奖模式 *</FormLabel>
             <FormControl>
@@ -127,7 +129,7 @@
           </FormItem>
         </FormField>
 
-        <FormField v-slot="{ field: componentField }" name="settings.lottery_code_format">
+        <FormField v-slot="{ componentField }" name="settings.lottery_code_format">
           <FormItem>
             <FormLabel>抽奖码格式</FormLabel>
             <FormControl>
