@@ -1,12 +1,24 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import type { Component } from 'vue'
+import { useRouter } from 'vue-router'
 import type { SidebarProps } from '../ui/sidebar'
 import NavMain from '@/components/admin/NavMain.vue'
 import NavUser from '@/components/admin/NavUser.vue'
-import { Bot, Sparkles, Settings2, Users } from 'lucide-vue-next'
-import { Sidebar, SidebarContent, SidebarFooter, SidebarRail } from '../ui/sidebar'
+import { Bot, Sparkles, Settings2, Users, Gift } from 'lucide-vue-next'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarRail,
+} from '../ui/sidebar'
 import { authApi } from '@/api'
+
+const router = useRouter()
 
 // 用户信息类型
 interface User {
@@ -113,6 +125,24 @@ const props = withDefaults(defineProps<SidebarProps>(), {
 
 <template>
   <Sidebar v-bind="props">
+    <!-- 品牌位：点击回到主页（折叠态自动只剩图标） -->
+    <SidebarHeader>
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton size="lg" @click="router.push('/')">
+            <div
+              class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
+            >
+              <Gift class="size-4" />
+            </div>
+            <div class="grid flex-1 text-left text-sm leading-tight">
+              <span class="truncate font-semibold">Lottery Tool</span>
+              <span class="truncate text-xs text-muted-foreground">抽奖系统</span>
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    </SidebarHeader>
     <SidebarContent>
       <NavMain :items="data.navMain" />
     </SidebarContent>

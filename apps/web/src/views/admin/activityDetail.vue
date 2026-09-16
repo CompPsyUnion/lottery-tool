@@ -194,6 +194,9 @@
           </div>
         </div>
         <div class="flex gap-2">
+          <Button variant="outline" @click="router.push(`/admin/activities/codes/${activityId}`)">
+            管理抽奖码
+          </Button>
           <Button variant="outline" @click="router.push(`/admin/activities/prizes/${activityId}`)">
             管理奖品
           </Button>

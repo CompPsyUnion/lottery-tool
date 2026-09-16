@@ -14,7 +14,7 @@
           </Button>
         </div>
 
-        <!-- 参与活动：列出当前开放中的线上活动，点击直接进入抽奖页 -->
+        <!-- 参与活动：列出当前进行中的活动（线上/线下），点击直接进入抽奖页 -->
         <div v-else class="max-w-3xl mx-auto">
           <div v-if="loadingActivities" class="text-gray-600 py-8">正在加载活动列表...</div>
           <div v-else-if="activitiesError" class="text-red-600 py-8">{{ activitiesError }}</div>
@@ -31,6 +31,9 @@
               <div class="mb-1 flex items-center gap-2">
                 <Gift class="h-4 w-4 shrink-0 text-blue-600" />
                 <span class="truncate font-semibold text-gray-900">{{ item.name }}</span>
+                <span class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                  {{ item.lottery_mode === 'online' ? '线上' : '线下' }}
+                </span>
               </div>
               <p class="min-h-10 text-sm text-gray-600">
                 {{ item.description || '暂无描述' }}
@@ -193,7 +196,7 @@ import type { OpenActivitySummary } from '@/types/api'
 // 路由实例
 const router = useRouter()
 
-// 参与活动：公开活动列表（进行中 + 线上模式）
+// 参与活动：公开活动列表（进行中，线上/线下均含）
 const showActivities = ref(false)
 const openActivities = ref<OpenActivitySummary[]>([])
 const loadingActivities = ref(false)

@@ -56,6 +56,14 @@ const adminRoutes: RouteRecordRaw[] = [
             },
           },
           {
+            path: 'codes/:id',
+            name: 'Activity Codes',
+            component: () => import('../views/admin/lotteryCodeManagement.vue'),
+            meta: {
+              title: 'Codes',
+            },
+          },
+          {
             path: 'create',
             name: 'Create',
             component: () => import('../views/admin/activityEdit.vue'),

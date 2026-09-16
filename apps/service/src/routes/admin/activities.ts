@@ -473,7 +473,10 @@ router.get(
     query('page').optional().isInt({ min: 1 }).withMessage('页码必须是正整数'),
     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('每页数量必须是1-100的整数'),
     query('search').optional().isLength({ max: 100 }).withMessage('搜索关键词不能超过100个字符'),
-    query('status').optional().isIn(['unused', 'used']).withMessage('状态只能是unused或used'),
+    query('status')
+      .optional()
+      .isIn(['unused', 'used', 'invalid'])
+      .withMessage('状态只能是unused、used或invalid'),
     query('has_participant_info')
       .optional()
       .isBoolean()
@@ -500,15 +503,63 @@ router.get(
               : undefined,
       })
 
+      // 附带各码抽奖记录数（删除警示「级联删除记录」与表格展示用；一次分组查询）
+      const recordCounts =
+        result.lottery_codes.length > 0
+          ? await LotteryCodeService.countRecordsByCodeIds(result.lottery_codes.map((c) => c.id))
+          : new Map<number, number>()
+      const lottery_codes = result.lottery_codes.map((code) => ({
+        ...code,
+        record_count: recordCounts.get(code.id) ?? 0,
+      }))
+
       res.json({
         success: true,
-        data: result,
+        data: { ...result, lottery_codes },
       })
     } catch (error) {
       next(error)
     }
   },
 )
+
+/**
+ * @route   GET /api/admin/activities/:id/lottery-codes/export
+ * @desc    导出抽奖码 CSV（UTF-8 BOM，Excel 可直接打开；排除测试码）
+ * @access  Private (Admin)
+ */
+router.get('/:id/lottery-codes/export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activityId = req.params.id
+
+    await requireActivityAccess(activityId, req)
+
+    const codes = await AppDataSource.getRepository(LotteryCode).find({
+      where: { activity_id: parseInt(activityId), is_test: false },
+      order: { created_at: 'ASC' },
+    })
+
+    // UTF-8 BOM 使 Excel 正确识别编码；与导入格式互逆（抽奖码,姓名,手机,邮箱）
+    const escapeCsv = (value: string): string =>
+      /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+    const lines = ['抽奖码,姓名,手机,邮箱']
+    for (const code of codes) {
+      const info = code.participant_info || {}
+      lines.push(
+        [code.code, info.name ?? '', info.phone ?? '', info.email ?? '']
+          .map((cell) => escapeCsv(String(cell)))
+          .join(','),
+      )
+    }
+    const csv = '\uFEFF' + lines.join('\r\n') + '\r\n'
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="lottery_codes_${activityId}.csv"`)
+    res.send(csv)
+  } catch (error) {
+    next(error)
+  }
+})
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes/batch
@@ -790,27 +841,158 @@ router.post(
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes/import
- * @desc    批量导入抽奖码
+ * @desc    批量导入/覆盖抽奖码（CSV 由前端解析为行数据）
+ *          upsert：同码更新参与者信息、新码创建；replace：先删全部 unused+invalid
+ *          业务码（保留 used 与测试码）再 upsert。逐行校验失败收集于 failed_rows
+ *          不拦截整批；配额超限整批拒绝（400）。覆盖/删除会级联删除关联抽奖记录。
  * @access  Private (Admin)
  */
 router.post(
   '/:id/lottery-codes/import',
+  [
+    body('codes').isArray({ min: 1, max: 1000 }).withMessage('codes 必须是包含1-1000个元素的数组'),
+    body('mode')
+      .optional()
+      .isIn(['upsert', 'replace'])
+      .withMessage('mode 只能是 upsert 或 replace'),
+  ],
+  validateRequest,
   logLotteryCodeOperation(OPERATION_TYPES.IMPORT_LOTTERY_CODE),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const activityId = req.params.id
+      const { codes, mode = 'upsert' } = req.body
+
+      const activity = await requireActivityAccess(activityId, req)
+
+      const result = await LotteryCodeService.importLotteryCodes(
+        activity,
+        codes as LotteryCodeService.ImportRowInput[],
+        mode,
+      )
+
+      // 全部行失败也返回 200：行级报告即载荷；400 仅用于结构错误与配额超限
+      res.status(200).json({
+        success: true,
+        data: {
+          mode: result.mode,
+          created_count: result.created.length,
+          updated_count: result.updated.length,
+          deleted_count: result.deleted_count,
+          records_deleted: result.records_deleted,
+          failed_rows: result.failed,
+          results: { created: result.created, updated: result.updated },
+        },
+        message: `抽奖码${mode === 'replace' ? '覆盖' : '导入'}完成：新增 ${result.created.length}，更新 ${result.updated.length}${
+          mode === 'replace' ? `，删除 ${result.deleted_count}` : ''
+        }，失败 ${result.failed.length}`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   POST /api/admin/activities/:id/lottery-codes/batch-delete
+ * @desc    按 id 批量删除抽奖码（允许已使用码——其抽奖记录将被级联删除）；
+ *          单个删除即传单元素数组。测试码恒不删。
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:id/lottery-codes/batch-delete',
+  [
+    body('ids').isArray({ min: 1, max: 1000 }).withMessage('ids 必须是1-1000个元素的数组'),
+    body('ids.*').isInt({ min: 1 }).withMessage('id 必须是正整数'),
+  ],
+  validateRequest,
+  logLotteryCodeOperation(OPERATION_TYPES.BATCH_DELETE_LOTTERY_CODE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activityId = req.params.id
+      const { ids } = req.body
 
       await requireActivityAccess(activityId, req)
 
-      // 这里应该处理文件上传和解析
-      // 由于没有配置multer，先返回一个占位响应
+      const result = await LotteryCodeService.deleteCodesByIds(parseInt(activityId), ids)
+
+      const deletedIds = new Set(result.deleted.map((c) => c.id))
+      const usedDeleted = result.deleted.filter((c) => c.status === 'used').length
+
       res.json({
         success: true,
         data: {
-          imported_count: 0,
-          lottery_codes: [],
+          // 逐 id 结果（前端勾选场景需要知道每个 id 的结局）
+          results: ids.map((id: number) => ({
+            id,
+            success: deletedIds.has(id),
+            message: deletedIds.has(id)
+              ? '已删除'
+              : result.test_skipped.includes(id)
+                ? '测试码不可删除'
+                : '抽奖码不存在',
+          })),
+          summary: {
+            total: ids.length,
+            deleted: result.deleted.length,
+            failed: ids.length - result.deleted.length,
+            used_deleted: usedDeleted,
+            records_deleted: result.records_deleted,
+          },
         },
-        message: '批量导入功能开发中',
+        message: `已删除 ${result.deleted.length} 个抽奖码${
+          usedDeleted > 0 ? `（含已使用 ${usedDeleted} 个，关联记录已一并删除）` : ''
+        }`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   PUT /api/admin/activities/:id/lottery-codes/:codeId/participant-info
+ * @desc    更新抽奖码参与者信息（码本身与状态不可改）
+ * @access  Private (Admin)
+ */
+router.put(
+  '/:id/lottery-codes/:codeId/participant-info',
+  [
+    body('participant_info.name')
+      .optional()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('姓名长度为1-100个字符'),
+
+    body('participant_info.phone')
+      .optional()
+      .isMobilePhone('zh-CN')
+      .withMessage('手机号格式不正确'),
+
+    body('participant_info.email').optional().isEmail().withMessage('邮箱格式不正确'),
+  ],
+  validateRequest,
+  logLotteryCodeOperation(OPERATION_TYPES.UPDATE_LOTTERY_CODE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activityId = req.params.id
+      const codeId = parseInt(req.params.codeId)
+
+      await requireActivityAccess(activityId, req)
+
+      const lotteryCode = await LotteryCodeService.findById(codeId)
+      if (!lotteryCode || lotteryCode.activity_id !== parseInt(activityId)) {
+        throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在')
+      }
+
+      const updated = await LotteryCodeService.updateParticipantInfo(
+        lotteryCode,
+        req.body.participant_info || {},
+      )
+
+      res.json({
+        success: true,
+        data: { lottery_code: updated },
+        message: '参与者信息已更新',
       })
     } catch (error) {
       next(error)

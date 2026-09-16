@@ -189,12 +189,38 @@ export const logLotteryCodeOperation = (operationType: string) => {
           const count = req.body.count || 0
           return `批量创建抽奖码: ${count}个`
         }
-        case OPERATION_TYPES.IMPORT_LOTTERY_CODE:
-          return '导入抽奖码'
+        case OPERATION_TYPES.IMPORT_LOTTERY_CODE: {
+          const mode = req.body.mode === 'replace' ? '覆盖' : '导入'
+          try {
+            const payload = _data && JSON.parse(_data)
+            const d = payload?.data
+            if (d) {
+              return `抽奖码${mode}：新增 ${d.created?.length ?? 0}，更新 ${
+                d.updated?.length ?? 0
+              }，删除 ${d.deleted_count ?? 0}，失败 ${d.failed?.length ?? 0}`
+            }
+          } catch {
+            // 响应非 JSON（异常路径）时落到兜底文案
+          }
+          return `抽奖码${mode}`
+        }
         case OPERATION_TYPES.UPDATE_LOTTERY_CODE:
           return '更新抽奖码信息'
         case OPERATION_TYPES.DELETE_LOTTERY_CODE:
           return '删除抽奖码'
+        case OPERATION_TYPES.BATCH_DELETE_LOTTERY_CODE: {
+          const ids: number[] = Array.isArray(req.body.ids) ? req.body.ids : []
+          try {
+            const payload = _data && JSON.parse(_data)
+            const summary = payload?.data?.summary
+            if (summary) {
+              return `批量删除抽奖码: ${summary.deleted}/${ids.length} 个（含已使用 ${summary.used_deleted}，级联记录 ${summary.records_deleted}）`
+            }
+          } catch {
+            // 响应非 JSON（异常路径）时落到兜底文案
+          }
+          return `批量删除抽奖码: ${ids.length} 个`
+        }
         default:
           return operationType
       }

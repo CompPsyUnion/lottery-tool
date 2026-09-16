@@ -26,7 +26,7 @@ const validateRequest = (req: Request, res: Response, next: NextFunction): void 
 
 /**
  * @route   GET /api/lottery/activities
- * @desc    公开的可参与活动列表（进行中 + 线上模式；首页「参与活动」直接点入）
+ * @desc    公开的可参与活动列表（进行中，线上/线下均列出；首页「参与活动」直接点入）
  * @access  Public
  */
 router.get('/activities', async (req: Request, res: Response, next: NextFunction) => {
@@ -34,7 +34,6 @@ router.get('/activities', async (req: Request, res: Response, next: NextFunction
     const activities = await AppDataSource.getRepository(Activity)
       .createQueryBuilder('activity')
       .where('activity.status = :status', { status: 'active' })
-      .andWhere('activity.lottery_mode = :mode', { mode: 'online' })
       .orderBy('activity.created_at', 'DESC')
       .getMany()
 
@@ -43,7 +42,7 @@ router.get('/activities', async (req: Request, res: Response, next: NextFunction
       (activity) => ActivityService.getActivityOpenState(activity).open === true,
     )
 
-    // 只返回公开字段（不含 settings / webhook 凭据）
+    // 只返回公开字段（不含 settings / webhook 凭据）；线下活动抽奖页会提示需管理员登录操作
     res.json({
       success: true,
       data: {
@@ -51,6 +50,7 @@ router.get('/activities', async (req: Request, res: Response, next: NextFunction
           id: activity.id,
           name: activity.name,
           description: activity.description,
+          lottery_mode: activity.lottery_mode,
           start_time: activity.start_time,
           end_time: activity.end_time,
         })),

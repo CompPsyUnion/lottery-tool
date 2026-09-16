@@ -6,8 +6,8 @@ import type { Component } from 'vue'
 export interface TableColumn {
   /** 列的唯一标识，对应数据字段名 */
   key: string
-  /** 列标题 */
-  title: string
+  /** 列标题；也可传组件（如表头全选框），字符串表头渲染行为不变 */
+  title: string | Component
   /** 列宽度，支持CSS宽度值 */
   width?: string
   /** 文本对齐方式 */

@@ -31,6 +31,11 @@ import type {
   UploadSignatureResponse,
   ActivityWebhookInfo,
   OpenActivitySummary,
+  ImportLotteryCodesRequest,
+  ImportLotteryCodesResponse,
+  BatchDeleteLotteryCodesRequest,
+  BatchDeleteLotteryCodesResponse,
+  UpdateParticipantInfoRequest,
 } from './types/api'
 
 // API 基础配置
@@ -425,6 +430,40 @@ export const adminActivityApi = {
   async ensureDemoCode(id: number): Promise<{ lottery_code: { id: number; code: string } }> {
     return apiFetch(`/admin/activities/${id}/lottery-codes/demo`, {
       method: 'POST',
+    })
+  },
+
+  // 批量导入/覆盖抽奖码（CSV 已由前端解析为行数据）
+  async importLotteryCodes(
+    id: number,
+    data: ImportLotteryCodesRequest,
+  ): Promise<ImportLotteryCodesResponse> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/import`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 按 id 批量删除（允许已使用码——其抽奖记录被级联删除；测试码恒不删）
+  async batchDeleteLotteryCodes(
+    id: number,
+    data: BatchDeleteLotteryCodesRequest,
+  ): Promise<BatchDeleteLotteryCodesResponse> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/batch-delete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 更新抽奖码参与者信息（码本身与状态不可改）
+  async updateLotteryCodeParticipantInfo(
+    id: number,
+    codeId: number,
+    data: UpdateParticipantInfoRequest,
+  ): Promise<{ lottery_code: LotteryCode }> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/${codeId}/participant-info`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
     })
   },
 

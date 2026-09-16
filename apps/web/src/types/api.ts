@@ -81,7 +81,7 @@ export interface Prize {
 export interface LotteryCode {
   id: number
   code: string
-  status: 'unused' | 'used'
+  status: 'unused' | 'used' | 'invalid'
   /** 测试抽奖码（一活动至多一个，抽奖不产生副作用） */
   is_test?: boolean
   participant_info?: {
@@ -91,6 +91,8 @@ export interface LotteryCode {
   }
   used_at?: string
   created_at: string
+  /** 关联抽奖记录数（管理列表附带；删除该码会级联删除这些记录） */
+  record_count?: number
 }
 
 export interface LotteryRecord {
@@ -121,11 +123,12 @@ export interface Pagination {
   totalPages: number
 }
 
-/** 公开可参与活动摘要（GET /lottery/activities：进行中 + 线上模式，仅公开字段） */
+/** 公开可参与活动摘要（GET /lottery/activities：进行中，线上/线下均列出，仅公开字段） */
 export interface OpenActivitySummary {
   id: number
   name: string
   description?: string | null
+  lottery_mode?: 'offline' | 'online'
   start_time?: string | null
   end_time?: string | null
 }
@@ -247,8 +250,8 @@ export interface UpdatePrizeRequest {
 export interface AddLotteryCodeRequest {
   code?: string
   participant_info?: {
-    name: string
-    phone: string
+    name?: string
+    phone?: string
     email?: string
   }
 }
@@ -283,8 +286,56 @@ export interface ActivityListParams extends SearchParams {
 }
 
 export interface LotteryCodeListParams extends SearchParams {
-  status?: 'unused' | 'used'
+  status?: 'unused' | 'used' | 'invalid'
   has_participant_info?: boolean
+}
+
+// ==================== 抽奖码批量管理 ====================
+
+export interface ImportLotteryCodeRow {
+  code: string
+  name?: string
+  phone?: string
+  email?: string
+}
+
+export interface ImportLotteryCodesRequest {
+  codes: ImportLotteryCodeRow[]
+  /** upsert：同码更新信息/新码创建；replace：先删全部 unused+invalid 业务码再 upsert */
+  mode: 'upsert' | 'replace'
+}
+
+export interface ImportLotteryCodesResponse {
+  mode: 'upsert' | 'replace'
+  created_count: number
+  updated_count: number
+  deleted_count: number
+  /** 覆盖/删除级联清除的抽奖记录数 */
+  records_deleted: number
+  failed_rows: Array<{ row: number; code?: string; reason: string }>
+}
+
+export interface BatchDeleteLotteryCodesRequest {
+  ids: number[]
+}
+
+export interface BatchDeleteLotteryCodesResponse {
+  results: Array<{ id: number; success: boolean; message: string }>
+  summary: {
+    total: number
+    deleted: number
+    failed: number
+    used_deleted: number
+    records_deleted: number
+  }
+}
+
+export interface UpdateParticipantInfoRequest {
+  participant_info: {
+    name?: string
+    phone?: string
+    email?: string
+  }
 }
 
 export interface LotteryRecordListParams extends PaginationParams {
