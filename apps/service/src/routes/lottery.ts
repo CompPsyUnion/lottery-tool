@@ -11,7 +11,7 @@ import * as ActivityService from '../services/activity.service'
 import * as LotteryCodeService from '../services/lottery-code.service'
 import * as PrizeService from '../services/prize.service'
 import * as LotteryRecordService from '../services/lottery-record.service'
-import { OPERATION_TYPES } from '../services/operation-log.service'
+import { OPERATION_TYPES, log as writeOperationLog } from '../services/operation-log.service'
 
 const router = express.Router()
 
@@ -285,6 +285,94 @@ router.post(
         success: true,
         data: responseData,
         message,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   POST /api/lottery/activities/:id/undo-draw
+ * @desc    撤销一次抽奖（签字完成前）：中奖恢复奖品库存、抽奖码置回未使用、删除本次记录。
+ *          线上抽奖无登录态，凭「记录 id + 本次抽奖码」作为归属凭证（与抽奖本身同信任级）；
+ *          测试码抽奖无副作用，直接返回成功。
+ * @access  Public（受全局 /lottery 限流）
+ */
+router.post(
+  '/activities/:id/undo-draw',
+  [
+    body('record_id').isInt({ min: 1 }).withMessage('记录ID必须是正整数'),
+    body('lottery_code').notEmpty().withMessage('抽奖码不能为空'),
+  ],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const { record_id, lottery_code: lotteryCode } = req.body
+
+      const record = await AppDataSource.getRepository(LotteryRecord).findOne({
+        where: { id: record_id },
+        relations: { activity: true, prize: true, lotteryCode: true },
+      })
+      if (!record || record.activity_id !== activityId) {
+        throw createError('BUSINESS_LOTTERY_RECORD_NOT_FOUND', '抽奖记录不存在')
+      }
+
+      // 归属凭证：撤销者必须持有本次抽奖码（与抽奖入口同信任级）
+      if (!record.lotteryCode || record.lotteryCode.code !== lotteryCode.trim()) {
+        throw createError('AUTH_INSUFFICIENT_PERMISSION', '抽奖码与本次记录不匹配')
+      }
+
+      // 测试码抽奖：无库存/状态副作用，直接成功（测试码与测试记录保留复用）
+      if (record.is_test) {
+        return res.json({
+          success: true,
+          data: { restored: true, is_test: true },
+          message: '测试抽奖无实际副作用',
+        })
+      }
+
+      // 签字是最终确认：已签字的记录不可撤销
+      if (record.signature_status === 'signed') {
+        throw createError('BUSINESS_SIGNATURE_EXISTS', '已签字确认的抽奖不可撤销')
+      }
+
+      await AppDataSource.transaction(async (manager) => {
+        // 中奖恢复库存（未中奖无奖品可恢复）
+        if (record.is_winner && record.prize_id) {
+          await PrizeService.restoreStock(record.prize!, 1, manager)
+        }
+        // 抽奖码置回未使用（可再次参与）
+        await LotteryCodeService.markAsUnused(record.lotteryCode!, manager)
+        // 删除本次记录
+        await manager.getRepository(LotteryRecord).remove(record)
+      })
+
+      await writeOperationLog({
+        user_id: record.operator_id ?? null,
+        operation_type: 'UNDO_LOTTERY_DRAW',
+        operation_detail: `撤销抽奖：${lotteryCode}${record.is_winner && record.prize ? `（恢复库存：${record.prize.name}）` : ''}`,
+        target_type: 'ACTIVITY',
+        target_id: activityId,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
+
+      res.json({
+        success: true,
+        data: { restored: true, is_test: false },
+        message: record.is_winner
+          ? '已撤销本次抽奖，奖品库存已恢复'
+          : '已撤销本次抽奖，抽奖码已恢复可用',
       })
     } catch (error) {
       next(error)

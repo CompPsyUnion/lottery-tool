@@ -25,6 +25,8 @@ import type {
   LotteryRecordListParams,
   Pagination,
   DrawLotteryResponse,
+  UndoDrawRequest,
+  UndoDrawResponse,
   RegistrationStatus,
   MailConfig,
   UploadSignatureRequest,
@@ -237,6 +239,18 @@ export const lotteryApi = {
   async draw(id: number, data: DrawLotteryRequest): Promise<DrawLotteryResponse> {
     return apiFetch(
       `/lottery/activities/${id}/draw`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+      false,
+    )
+  },
+
+  // 撤销本次抽奖（签字完成前：恢复库存/码/删记录；测试码无副作用直返）
+  async undoDraw(id: number, data: UndoDrawRequest): Promise<UndoDrawResponse> {
+    return apiFetch(
+      `/lottery/activities/${id}/undo-draw`,
       {
         method: 'POST',
         body: JSON.stringify(data),

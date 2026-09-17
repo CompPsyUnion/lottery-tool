@@ -114,9 +114,14 @@
       </div>
     </div>
 
-    <!-- 抽奖结果Dialog -->
-    <Dialog :open="showResult" @update:open="(open) => (showResult = open)">
-      <DialogContent class="max-w-lg mx-4 rounded-2xl border-0 shadow-2xl">
+    <!-- 抽奖结果Dialog（关闭前拦截：提前退出需经「确认撤销」弹窗） -->
+    <Dialog :open="showResult" @update:open="handleResultCloseRequest">
+      <DialogContent
+        class="max-w-lg mx-4 rounded-2xl border-0 shadow-2xl"
+        :show-close-button="false"
+        @escape-key-down.prevent
+        @pointer-down-outside.prevent
+      >
         <DialogHeader class="pb-6">
           <DialogTitle class="text-center space-y-4">
             <div v-if="lotteryResult?.is_winner" class="space-y-4">
@@ -180,8 +185,15 @@
         </div>
 
         <DialogFooter class="pt-6">
-          <div class="w-full flex justify-center">
-            <!-- 需要签字：主按钮为「去签字」，手动进入必签流程（不再自动跳转） -->
+          <div class="w-full flex justify-center gap-3">
+            <!-- 撤销本次操作：中奖在签字完成前可撤销（恢复库存/码/删记录） -->
+            <button
+              class="px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 font-medium rounded-xl transition-all duration-200"
+              @click="showUndoConfirm = true"
+            >
+              撤销本次操作
+            </button>
+            <!-- 需要签字：主按钮为「去签字」，手动进入必签流程 -->
             <button
               v-if="pendingSignature"
               class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
@@ -189,10 +201,11 @@
             >
               去签字确认
             </button>
+            <!-- 无签字环节：确定=保留结果离开 -->
             <button
               v-else
               class="px-8 py-3 bg-linear-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium rounded-xl transition-all duration-200 shadow-lg transform"
-              @click="closeResult"
+              @click="keepResult"
             >
               确定
             </button>
@@ -201,13 +214,50 @@
       </DialogContent>
     </Dialog>
 
-    <!-- 签字弹窗（必签：不可取消/ESC/遮罩关闭，提交成功才结束） -->
+    <!-- 撤销确认弹窗（撤销按钮 / 提前退出结果页共用） -->
+    <Dialog :open="showUndoConfirm" @update:open="(open) => (showUndoConfirm = open)">
+      <DialogContent class="max-w-md mx-4 rounded-2xl border-0 shadow-2xl">
+        <DialogHeader class="pb-4">
+          <DialogTitle class="text-center text-xl font-bold text-slate-700">
+            确认撤销本次抽奖？
+          </DialogTitle>
+        </DialogHeader>
+        <div class="text-sm text-slate-600 space-y-2 text-center">
+          <p>撤销后本次抽奖作废：</p>
+          <p>· 中奖奖品库存将复原</p>
+          <p>· 抽奖码恢复可用（可重新参与）</p>
+          <p>· 本次抽奖记录将被删除</p>
+          <p class="text-xs text-muted-foreground">已签字确认的抽奖不可撤销</p>
+        </div>
+        <DialogFooter class="pt-6">
+          <div class="w-full flex justify-center gap-3">
+            <button
+              class="px-6 py-2.5 border rounded-xl text-slate-600 hover:bg-slate-50 font-medium transition-all"
+              @click="showUndoConfirm = false"
+            >
+              再想想
+            </button>
+            <button
+              class="px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium rounded-xl transition-all"
+              :disabled="undoing"
+              @click="handleUndoConfirm"
+            >
+              {{ undoing ? '撤销中...' : '确认撤销' }}
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- 签字弹窗（必签：不可取消/ESC/遮罩关闭；签字完成前可经「撤销本次抽奖」退出） -->
     <SignatureDialog
       v-model:visible="showSignature"
       :is-submitting="isSubmittingSignature"
       :error-message="signatureError"
       :dismissible="false"
+      :show-undo="true"
       @confirm="handleSignatureConfirm"
+      @undo="showUndoConfirm = true"
     />
 
     <!-- Toast 组件 -->
@@ -270,6 +320,12 @@ const signatureError = ref('')
 const currentRecordId = ref<number | null>(null)
 /** 本次抽奖需要签字（结果弹窗据此展示「去签字」按钮，手动进入） */
 const pendingSignature = ref(false)
+
+// 撤销本次抽奖（签字完成前）：中奖恢复库存/码置回/删记录
+const showUndoConfirm = ref(false)
+const undoing = ref(false)
+/** 撤销凭证：本次使用的抽奖码（清空输入前留存） */
+const lastDrawnCode = ref('')
 
 // 参与者信息（仅online模式需要）
 const participantInfo = ref({
@@ -476,15 +532,6 @@ const handleDraw = async () => {
     pendingSignature.value = !!(isOffline && requireSignature && recordId && isWinner)
     if (recordId) currentRecordId.value = recordId
 
-    if (!pendingSignature.value) {
-      // 不需要签字时，5秒后自动关闭结果弹窗
-      setTimeout(() => {
-        if (showResult.value) {
-          closeResult()
-        }
-      }, 5000)
-    }
-
     // 显示抽奖结果提示
     if (lotteryResult.value?.is_winner && lotteryResult.value?.prize) {
       toast.success(`🎉 恭喜您抽中了：${lotteryResult.value.prize.name}！`)
@@ -492,7 +539,8 @@ const handleDraw = async () => {
       toast.info('很遗憾，本次未中奖，请再接再厉！')
     }
 
-    // 清空输入
+    // 清空输入（撤销凭证先留存本次抽奖码）
+    lastDrawnCode.value = lotteryCode.value
     lotteryCode.value = ''
     if (activityInfo.value?.lottery_mode === 'online') {
       participantInfo.value = { name: '', phone: '', email: '' }
@@ -528,6 +576,55 @@ const closeResult = () => {
   showResult.value = false
   lotteryResult.value = null
   pendingSignature.value = false
+}
+
+// 结果弹窗的关闭请求拦截：ESC/遮罩等提前退出 ≠ 直接关闭，
+// 一律先经「确认撤销」弹窗（确认后走撤销接口复原库存/码/记录）
+const handleResultCloseRequest = (open: boolean) => {
+  if (!open && showResult.value) {
+    showUndoConfirm.value = true
+    return
+  }
+  showResult.value = open
+}
+
+// 确定：保留结果离开（不撤销）
+const keepResult = () => {
+  closeResult()
+}
+
+// 确认撤销本次抽奖：恢复库存/码/删记录；抽奖码回填便于重试
+const handleUndoConfirm = async () => {
+  if (!currentRecordId.value || !lastDrawnCode.value) {
+    // 无记录可撤销（理论上不可达）：按关闭处理
+    showUndoConfirm.value = false
+    closeResult()
+    return
+  }
+
+  undoing.value = true
+  try {
+    await lotteryApi.undoDraw(activityId, {
+      record_id: currentRecordId.value,
+      lottery_code: lastDrawnCode.value,
+    })
+
+    showUndoConfirm.value = false
+    showSignature.value = false
+    closeResult()
+    currentRecordId.value = null
+    // 回填本次抽奖码（线上模式还需补参与者信息），便于修正后重新参与
+    lotteryCode.value = lastDrawnCode.value
+    toast.success('已撤销本次抽奖，抽奖码恢复可用')
+  } catch (err) {
+    let errorMessage = '撤销失败，请重试'
+    if (err && typeof err === 'object' && 'message' in err) {
+      errorMessage = (err as { message: string }).message
+    }
+    toast.error(errorMessage)
+  } finally {
+    undoing.value = false
+  }
 }
 
 // 从结果弹窗进入签字（手动触发）

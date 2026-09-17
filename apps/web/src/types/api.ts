@@ -356,6 +356,17 @@ export interface DrawLotteryResponse {
   lottery_code: LotteryCode
 }
 
+/** 撤销本次抽奖（签字完成前）：中奖恢复库存、码置回未使用、删除本次记录 */
+export interface UndoDrawRequest {
+  record_id: number
+  lottery_code: string
+}
+
+export interface UndoDrawResponse {
+  restored: boolean
+  is_test: boolean
+}
+
 // 签字上传（PNG data URL）
 export interface UploadSignatureRequest {
   image: string
