@@ -40,7 +40,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-lottery}
 
       # JWT配置（务必修改为强随机值）
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (openssl rand -hex 32)}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
 
       # 超级管理员引导（可选）：同时设置用户名/密码且库为空时启动即创建超管；

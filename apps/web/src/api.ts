@@ -277,14 +277,6 @@ export const systemApi = {
     })
   },
 
-  // 更新用户状态
-  async updateUserStatus(id: number, status: 'active' | 'inactive'): Promise<{ user: User }> {
-    return apiFetch(`/system/users/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
-    })
-  },
-
   // 删除用户
   async deleteUser(id: number): Promise<void> {
     return apiFetch(`/system/users/${id}`, {

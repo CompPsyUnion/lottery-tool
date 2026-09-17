@@ -46,8 +46,8 @@
         </FormField>
       </div>
 
-      <!-- 权限设置 -->
-      <div class="space-y-4">
+      <!-- 权限设置（角色/状态属敏感字段，仅超级管理员可见可改） -->
+      <div v-if="isSuperAdmin" class="space-y-4">
         <h3 class="text-lg font-medium text-gray-900">权限设置</h3>
 
         <FormField v-slot="{ field: componentField }" name="role">
@@ -158,10 +158,18 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
 
 import { systemApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 import type { CreateUserRequest, UpdateUserRequest } from '@/types/api'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+
+// 权限：role/status 字段与「他人」的写操作仅超管（后端硬校验，前端隐藏表单防误提交）
+const isSuperAdmin = computed(() => userStore.role === 'super_admin')
+const isSelf = computed(() => userId.value !== null && userId.value === userStore.user?.id)
+// 普通管理员只应进入「编辑自己」；创建与他人编辑直接回列表
+const canWriteOthers = computed(() => isSuperAdmin.value || isSelf.value)
 
 // 判断是否为编辑模式
 const isEditMode = computed(() => !!route.params.id)
@@ -265,12 +273,16 @@ const onSubmit = form.handleSubmit(async (values) => {
 
   try {
     if (isEditMode.value && userId.value) {
-      // 更新用户
+      // 更新用户（普通管理员仅可改自己的用户名/邮箱，不带 role/status）
       const updateData: UpdateUserRequest = {
         username: values.username,
         email: values.email,
-        role: values.role as 'admin' | 'super_admin',
-        status: values.status as 'active' | 'inactive',
+        ...(isSuperAdmin.value
+          ? {
+              role: values.role as 'admin' | 'super_admin',
+              status: values.status as 'active' | 'inactive',
+            }
+          : {}),
       }
 
       await systemApi.updateUser(userId.value, updateData)
@@ -330,6 +342,12 @@ const formatDateTime = (dateString: string) => {
 
 // 组件挂载时加载数据
 onMounted(() => {
+  // 创建用户与编辑他人仅超管（后端已硬校验，这里提前拦截避免填完表单才被拒）
+  if (!canWriteOthers.value) {
+    toast.error('该操作仅超级管理员可执行')
+    router.replace('/admin/users')
+    return
+  }
   loadUser()
 })
 </script>

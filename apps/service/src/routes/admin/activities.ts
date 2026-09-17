@@ -12,6 +12,7 @@ import {
   validateLotteryCodeFormat,
 } from '../../utils/lottery-code-generator'
 import { AppDataSource } from '../../utils/database'
+import { requireActivityAccess as requireActivityAccessShared } from '../../middleware/activity-access'
 import { Activity } from '../../entities/activity.entity'
 import { LotteryCode } from '../../entities/lottery-code.entity'
 import * as ActivityService from '../../services/activity.service'
@@ -35,19 +36,8 @@ const validateRequest = (req: Request, res: Response, next: NextFunction): void 
   next()
 }
 
-// 验证活动存在且当前用户有权限
-const requireActivityAccess = async (activityId: string, req: Request): Promise<Activity> => {
-  const activity = await ActivityService.findById(parseInt(activityId))
-  if (!activity) {
-    throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
-  }
-
-  if ((req as any).user.role !== 'super_admin' && activity.created_by !== (req as any).user.id) {
-    throw createError('AUTH_INSUFFICIENT_PERMISSION', '只能访问自己创建的活动')
-  }
-
-  return activity
-}
+// 验证活动存在且当前用户有权限（共享实现，见 middleware/activity-access.ts）
+const requireActivityAccess = requireActivityAccessShared
 
 // 活动设置键级校验（创建与更新共用；POST 白名单重建、PUT 合并覆盖，见各 handler）
 const activitySettingsValidators = [

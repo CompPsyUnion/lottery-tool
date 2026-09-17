@@ -115,6 +115,12 @@ onMounted(async () => {
       title: 'Super',
       url: '/admin/super-settings',
     })
+  } else {
+    // 创建/编辑他人用户仅超管（后端硬校验，侧边栏同步隐藏入口）
+    const usersItem = data.value.navMain.find((item) => item.title === 'Users')
+    if (usersItem?.items) {
+      usersItem.items = usersItem.items.filter((sub) => sub.url !== '/admin/users/add')
+    }
   }
 })
 

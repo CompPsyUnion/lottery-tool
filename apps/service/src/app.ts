@@ -18,6 +18,14 @@ const isRuntimeEnvironment = (): boolean => {
 }
 
 export const createApp = async (): Promise<void> => {
+  // JWT 密钥 fail-fast：缺失直接拒绝启动（曾随 docker-compose 默认值外泄，
+  // 已知默认密钥 = 可伪造任意身份令牌）
+  if (!process.env.JWT_SECRET) {
+    console.error('[bootstrap] 缺少 JWT_SECRET 环境变量——拒绝启动。请生成强随机值，例如：')
+    console.error('           openssl rand -hex 32')
+    throw new Error('JWT_SECRET is required')
+  }
+
   const app = express()
 
   // 反向代理（Caddy/nginx 等）后的部署：让 req.ip / req.protocol 采用 X-Forwarded-*，
@@ -31,25 +39,49 @@ export const createApp = async (): Promise<void> => {
   app.use(
     cors({
       origin: process.env.CORS_ORIGIN || '*',
-      credentials: true,
+      // 通配符源（未配置 CORS_ORIGIN）不允许携带凭据；本应用鉴权走 Bearer 头，
+      // credentials 仅在显式配置同源/白名单时才有意义
+      credentials: !!process.env.CORS_ORIGIN,
     }),
   )
 
-  // 限流中间件
+  // 限流：全局基线 + 敏感面专用严格限制（原 /api 挂载无路由匹配，从未生效）
+  const rateLimitResponse = {
+    success: false,
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: '请求频率过高，请稍后再试',
+    },
+  }
   const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15分钟
     max: 1000, // 每个IP最多1000次请求
-    message: {
-      success: false,
-      error: {
-        code: 'RATE_LIMIT_EXCEEDED',
-        message: '请求频率过高，请稍后再试',
-      },
-    },
+    message: rateLimitResponse,
   })
-  app.use('/api', limiter)
-  // webhook 面也限流（query token 鉴权可被暴力尝试，且直接触发 DB 查询）
-  app.use('/webhook', limiter)
+  // 登录爆破刹车（bcrypt cost 12 之外的第二道闸）
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: rateLimitResponse,
+  })
+  // 验证码发送：per-IP 叠加（另有 per-email 1/min+10/day 通道限制），防邮件轰炸
+  const sendCodeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    message: rateLimitResponse,
+  })
+  // 公开抽奖码查询/校验：防码空间枚举（4 位码仅 1 万种）
+  const publicCodeLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    message: rateLimitResponse,
+  })
+  app.use('/auth/login', loginLimiter)
+  app.use('/auth/send-code', sendCodeLimiter)
+  app.use('/lottery-codes', publicCodeLimiter)
+  for (const path of ['/auth', '/admin', '/system', '/dashboard', '/lottery', '/webhook']) {
+    app.use(path, limiter)
+  }
 
   // 解析中间件（webhook 面对非法 JSON 容错：按空载荷处理走跳过/绑定回退路径，
   // 避免厂商探测因 body 解析失败拿到 400 导致绑定失败）

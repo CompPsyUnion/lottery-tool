@@ -517,6 +517,8 @@ router.post(
       .notEmpty()
       .withMessage('签字图片不能为空')
       .isString()
+      // MIME 白名单：签字板输出 PNG；拒绝任意 data:* 类型入库（曾接受任意 MIME）
+      .matches(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/)
       .withMessage('签字图片必须是base64字符串'),
   ],
   validateRequest,

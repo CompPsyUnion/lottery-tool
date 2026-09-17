@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { Request, Response, NextFunction } from 'express'
+import { timingSafeEqual } from 'crypto'
 import { createError } from '../utils/custom-error'
 import * as UserService from '../services/user.service'
 import * as ActivityService from '../services/activity.service'
@@ -146,8 +147,10 @@ export const authenticateWebhook = async (
       throw createError('BUSINESS_ACTIVITY_NOT_FOUND', '活动不存在')
     }
 
-    // 验证webhook token
-    if (activity.webhook_token !== token) {
+    // 验证webhook token（恒时比较，防时序侧信道逐字节探测）
+    const expected = Buffer.from(activity.webhook_token as string)
+    const provided = Buffer.from(token)
+    if (expected.length !== provided.length || !timingSafeEqual(expected, provided)) {
       throw createError('AUTH_TOKEN_INVALID', 'Webhook Token无效')
     }
 
