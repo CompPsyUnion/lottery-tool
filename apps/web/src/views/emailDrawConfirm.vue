@@ -20,7 +20,16 @@
       </button>
     </div>
 
-    <!-- 抽奖结果（点击设备直接展示；不含撤销——撤销在原提交页经邮箱可查） -->
+    <!-- 「点击链接显示结果」关闭：仅确认，结果回大屏看 -->
+    <div v-else-if="done && !showResultOnClick" class="w-full max-w-md">
+      <div class="rounded-xl border border-green-100 bg-green-50 p-6 text-center space-y-3">
+        <div class="text-4xl">✅</div>
+        <p class="text-lg font-semibold text-green-800">已完成抽奖确认</p>
+        <p class="text-sm text-green-700">抽奖结果请在您提交邮箱的页面（大屏）上查看</p>
+      </div>
+    </div>
+
+    <!-- 抽奖结果（「点击链接直接显示结果」开启时展示；不含撤销——撤销在原提交页经邮箱可查） -->
     <div v-else class="w-full max-w-md">
       <div class="bg-white rounded-2xl p-8 text-center space-y-6">
         <div class="space-y-4">
@@ -92,6 +101,26 @@ const result = ref<{
 const done = ref(false)
 const error = ref('')
 
+// 活动的「点击链接直接显示结果」设置（默认 false=仅确认，结果回大屏看）
+const showResultOnClick = ref(true)
+const activityLoaded = ref(false)
+
+// 先加载活动设置再执行抽奖
+const loadActivitySettings = async () => {
+  try {
+    const res = await lotteryApi.getActivity(activityId)
+    const emailDraw = (
+      res.activity.settings as { email_draw?: { show_result_on_click?: boolean } } | undefined
+    )?.email_draw
+    showResultOnClick.value = emailDraw?.show_result_on_click === true
+  } catch {
+    // 加载失败按默认（仅确认）处理
+    showResultOnClick.value = false
+  } finally {
+    activityLoaded.value = true
+  }
+}
+
 // 邮箱即抽码走公开 draw（码即凭证，无需管理员登录，不受活动模式限制）
 const execute = async () => {
   error.value = ''
@@ -109,6 +138,9 @@ const execute = async () => {
     result.value = { is_winner: res.is_winner, prize: res.prize || null }
     done.value = true
 
+    // 「点击链接直接显示结果」关闭时：不在本设备展示结果（含 toast），只确认
+    if (!showResultOnClick.value) return
+
     if (res.is_winner && res.prize) {
       toast.success(`🎉 恭喜您抽中了：${res.prize.name}！`)
     } else {
@@ -123,11 +155,12 @@ const execute = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!activityId || !edrawCode) {
     error.value = '链接无效（缺少活动或抽奖码参数）'
     return
   }
+  await loadActivitySettings()
   execute()
 })
 </script>
