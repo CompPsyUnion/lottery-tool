@@ -300,16 +300,20 @@ router.post(
         throw error
       }
 
-      // 审计：kdocs 建码
+      // 审计：kdocs 建码（抽奖码 + 抽奖人身份：邮箱优先，无邮箱记姓名）
+      const kdocsActor = participantInfo.email || participantInfo.name || null
       await AuditService.record({
         activity_id: activity.id,
         action: 'CODE_CREATE',
         lottery_code: code,
         delta: 1,
-        actor_type: 'system',
-        detail: '金山表单 webhook 建码',
+        actor_type: kdocsActor ? 'participant' : 'system',
+        actor: kdocsActor,
         ip_address: req.ip,
         user_agent: req.get('User-Agent') || null,
+        detail: `金山表单建码：${participantInfo.name || '未署名'}（${
+          participantInfo.email || participantInfo.phone || '无联系方式'
+        }）`,
       })
 
       await OperationLogService.log({

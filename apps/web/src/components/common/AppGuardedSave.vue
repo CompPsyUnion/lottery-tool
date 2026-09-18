@@ -45,8 +45,11 @@ const mergedLabels = computed(() => ({ ...defaultLabels, ...(props.labels || {})
     :on-save="onSave"
     :on-discard="onDiscard"
     :labels="mergedLabels"
-    :sidebar-inset="sidebarInset"
-    :inset-class="insetClass"
+    :sidebar-inset="sidebarInset ?? true"
+    :inset-class="
+      insetClass ??
+      'lg:left-64 group-has-[[data-collapsible=icon]]/sidebar-wrapper:lg:left-[3.5rem]'
+    "
     :bar-class="barClass"
     :save-class="saveClass"
     :discard-class="discardClass"
