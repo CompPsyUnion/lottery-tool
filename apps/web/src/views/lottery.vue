@@ -408,9 +408,9 @@ const resultFromPoll = ref(false)
 /** 邮件链接 ?edraw=code：预填并自动以公开 draw 执行（无视 offline 登录门槛） */
 const edrawCode = urlParams.get('edraw')
 if (edrawCode) lotteryCode.value = edrawCode
-/** 活动关闭「点击链接显示结果」：链接设备仅确认参与，结果只在原提交页（大屏）展示 */
+/** 「点击链接显示结果」默认关闭：链接设备仅确认参与，结果只在原提交页（大屏）展示 */
 const edrawHideResult = computed(
-  () => activityInfo.value?.settings?.email_draw?.show_result_on_click === false,
+  () => activityInfo.value?.settings?.email_draw?.show_result_on_click !== true,
 )
 const edrawConfirmedNotice = ref(false)
 

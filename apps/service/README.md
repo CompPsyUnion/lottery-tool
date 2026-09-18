@@ -168,8 +168,9 @@ curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
 
 Optional per-activity feature
 (`settings.email_draw = { enabled, domain_suffix, max_per_email, show_result_on_click }`;
-`show_result_on_click: false` = the clicking device only confirms participation and is told to
-check the result on the submitting page / big screen).
+`show_result_on_click` defaults to `false` — the clicking device only confirms participation
+and is told to check the result on the submitting page / big screen; set `true` to also show
+the result on the clicking device).
 Participants enter an email prefix on the lottery page; the backend mails a confirmation link —
 clicking the link performs the actual draw via the public draw endpoint (works for offline
 activities too; the link token is the proof of mailbox ownership). The submitting page long-polls

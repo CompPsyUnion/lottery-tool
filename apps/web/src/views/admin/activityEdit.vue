@@ -551,7 +551,7 @@ const form = useForm({
         enabled: false,
         domain_suffix: '',
         max_per_email: 1,
-        show_result_on_click: true,
+        show_result_on_click: false,
       },
     },
   },
@@ -610,7 +610,7 @@ const loadActivity = async () => {
           enabled: activity.settings?.email_draw?.enabled === true,
           domain_suffix: activity.settings?.email_draw?.domain_suffix || '',
           max_per_email: activity.settings?.email_draw?.max_per_email || 1,
-          show_result_on_click: activity.settings?.email_draw?.show_result_on_click !== false,
+          show_result_on_click: activity.settings?.email_draw?.show_result_on_click === true,
         },
       },
     })
@@ -676,7 +676,7 @@ const onSubmit = form.handleSubmit(async (values) => {
           enabled: values.settings?.email_draw?.enabled === true,
           domain_suffix: values.settings?.email_draw?.domain_suffix?.trim() || undefined,
           max_per_email: values.settings?.email_draw?.max_per_email || 1,
-          show_result_on_click: values.settings?.email_draw?.show_result_on_click !== false,
+          show_result_on_click: values.settings?.email_draw?.show_result_on_click === true,
         },
       },
     }

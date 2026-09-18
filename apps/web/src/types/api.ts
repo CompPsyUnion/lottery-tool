@@ -26,7 +26,7 @@ export interface EmailDrawSettings {
   domain_suffix?: string
   /** 同一邮箱在本活动的参与次数上限（默认 1） */
   max_per_email?: number
-  /** 点击链接设备是否直接显示结果（默认 true；false=仅确认，回原提交页查看） */
+  /** 点击链接设备是否直接显示结果（默认 false=仅确认，回原提交页查看） */
   show_result_on_click?: boolean
 }
 
