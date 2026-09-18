@@ -118,12 +118,23 @@ async function apiFetch<T>(
         )
       }
 
-      // 兼容两种后端错误格式：统一格式 error.message；
-      // 旧校验格式顶层 message（笼统）+ errors 数组（具体说明，优先取首条）
+      // 兼容两种后端错误格式：统一格式 error.message（笼统类别）+ error.details（具体原因）；
+      // 旧校验格式顶层 message + errors 数组。
+      // 展示优先级：details > message > errors[0] > 顶层 message——后端把可操作的
+      // 说明（如「该邮箱参与次数已达上限」）放在 details，笼统类别（「参数值超出范围」）
+      // 放在 message，取 details 才能让用户看到真正原因
       const firstFieldError = errorData.errors?.[0]?.msg || errorData.errors?.[0]?.message
+      const details = errorData.error?.details
+      const detailsText =
+        typeof details === 'string' && details.trim() !== ''
+          ? details
+          : Array.isArray(details)
+            ? details[0]?.msg || details[0]?.message || ''
+            : ''
       throw new ApiError(
         errorData.error?.code || 'UNKNOWN_ERROR',
-        errorData.error?.message ||
+        detailsText ||
+          errorData.error?.message ||
           firstFieldError ||
           errorData.message ||
           'Unknown error occurred',
