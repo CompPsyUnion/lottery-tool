@@ -288,6 +288,18 @@ export const lotteryApi = {
     )
   },
 
+  // 邮箱即抽确认链接执行（码 + 防伪令牌双凭证）
+  async confirmEmailDraw(id: number, code: string, token: string): Promise<DrawLotteryResponse> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/confirm`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ code, token }),
+      },
+      false,
+    )
+  },
+
   // 邮箱即抽状态（wait=true 为长轮询，服务端最长挂 20s）
   async emailDrawStatus(id: number, email: string, wait = false): Promise<EmailDrawStatus> {
     return apiFetch(

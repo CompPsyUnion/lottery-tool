@@ -9,6 +9,7 @@ import { LotteryRecord } from '../entities/lottery-record.entity'
 import { Prize } from '../entities/prize.entity'
 import { LotteryCode } from '../entities/lottery-code.entity'
 import { generateLotteryCode } from '../utils/lottery-code-generator'
+import { randomBytes, timingSafeEqual } from 'crypto'
 import { renderEmailDrawMail } from '../utils/mail-theme'
 import * as ActivityService from '../services/activity.service'
 import * as LotteryCodeService from '../services/lottery-code.service'
@@ -572,7 +573,9 @@ router.post(
             lotteryCode = await AppDataSource.getRepository(LotteryCode).save({
               activity_id: activityId,
               code: candidate,
-              participant_info: { email },
+              // _edraw_token：确认链接的独立防伪令牌（与码值分离——码格式可能很短
+              // 如 4 位数字可枚举，token 128-bit 不可猜；存在 participant_info 内部字段）
+              participant_info: { email, _edraw_token: randomBytes(16).toString('hex') },
               status: 'unused',
             })
             break
@@ -594,7 +597,9 @@ router.post(
         (req.get('referer') ? new URL(req.get('referer')!).origin : undefined) ||
         `${req.protocol}://${req.get('host')}`
       // 独立确认子页（不占用 /lottery 主路由——提交页在那边长轮询，互不干扰）
-      const link = `${frontendBase}/edraw/${activityId}?code=${lotteryCode.code}`
+      const edrawToken = (lotteryCode.participant_info as Record<string, unknown>)
+        ?._edraw_token as string
+      const link = `${frontendBase}/edraw/${activityId}?code=${lotteryCode.code}&t=${edrawToken}`
 
       await MailService.sendMail(mailConfig, {
         to: email,
@@ -659,7 +664,10 @@ router.get('/activities/:id/email-draw/status', async (req, res, next) => {
     const deadline = Date.now() + 20_000
     while (true) {
       const codes = await findEmailCodes(activityId, email)
-      const drawnCode = codes.find((c) => c.status === 'used')
+      // 看最新一次请求的码（created_at 升序取末尾）：旧轮已抽的 used 码不应让
+      // 新一轮提交立刻误报 drawn（修复：发确认邮件后直接弹旧结果）
+      const latestCode = codes.length > 0 ? codes[codes.length - 1] : null
+      const drawnCode = latestCode && latestCode.status === 'used' ? latestCode : null
       if (drawnCode) {
         const record = await AppDataSource.getRepository(LotteryRecord).findOne({
           where: { lottery_code_id: drawnCode.id, is_test: false },
@@ -698,6 +706,136 @@ router.get('/activities/:id/email-draw/status', async (req, res, next) => {
     next(error)
   }
 })
+
+/**
+ * @route   POST /api/lottery/activities/:id/email-draw/confirm
+ * @desc    邮箱即抽确认链接的执行端点：抽奖码 + 防伪令牌双凭证（token 128-bit
+ *          不可猜，防他人枚举码值后替抽）；执行后走与公开 draw 完全一致的
+ *          抽奖事务（含审计）。公开 draw 端点对带 _edraw_token 的码要求
+ *          同时提供 token（见 draw 内校验）。
+ * @access  Public（双凭证即鉴权）
+ */
+router.post(
+  '/activities/:id/email-draw/confirm',
+  [
+    body('code').notEmpty().withMessage('抽奖码不能为空'),
+    body('token').notEmpty().withMessage('令牌不能为空'),
+  ],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const { code, token } = req.body
+
+      const activity = await ActivityService.findById(activityId)
+      if (!activity) throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
+
+      const lotteryCodeRecord = await LotteryCodeService.findByActivityAndCode(activityId, code)
+      if (!lotteryCodeRecord) {
+        throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在或不属于此活动')
+      }
+
+      // 防伪令牌恒时校验
+      const stored = (lotteryCodeRecord.participant_info as Record<string, unknown>)
+        ?._edraw_token as string | undefined
+      const provided = Buffer.from(String(token))
+      const expected = Buffer.from(String(stored || ''))
+      if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+        throw createError('AUTH_TOKEN_INVALID', '确认链接无效或已过期')
+      }
+
+      // 复用公开 draw 的完整事务（库存/记录/审计）——由 confirm 路由内部转发实现，
+      // 等价于 lotteryApi.draw(code)（token 已验证，走标准 draw 语义）
+      const { responseData, message } = await AppDataSource.transaction(async (manager) => {
+        const lc = await manager.getRepository(LotteryCode).findOneBy({
+          activity_id: activityId,
+          code,
+        })
+        if (!lc) throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND')
+
+        const canStart = ActivityService.canStartLottery(activity)
+        if (!canStart.canStart) {
+          throw createError('BUSINESS_ACTIVITY_NOT_STARTED', canStart.reason)
+        }
+        if (lc.status === 'used') {
+          throw createError('BUSINESS_LOTTERY_CODE_USED')
+        }
+
+        let selectedPrize: Prize | null = null
+        const stockBefore = await (async () => {
+          const sel = await PrizeService.selectByProbability(activityId, activity, { manager })
+          if (sel && sel.remaining_quantity > 0) {
+            selectedPrize = sel
+            return sel.remaining_quantity
+          }
+          return sel ? sel.remaining_quantity : null
+        })()
+        if (selectedPrize) {
+          await PrizeService.deductStock(selectedPrize, 1, manager)
+        }
+        await LotteryCodeService.markAsUsed(lc, manager)
+        const record = await LotteryRecordService.createRecord(
+          {
+            activity_id: activityId,
+            lottery_code_id: lc.id,
+            prize_id: selectedPrize ? selectedPrize.id : null,
+            is_winner: !!selectedPrize,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+        await AuditService.record(
+          {
+            activity_id: activityId,
+            action: 'DRAW_ONLINE',
+            lottery_code: lc.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: stockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : stockBefore,
+            actor_type: 'email',
+            actor: (lc.participant_info as Record<string, unknown>)?.email as string,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: '邮箱即抽确认链接抽奖',
+          },
+          manager,
+        )
+        const data: Record<string, unknown> = {
+          is_winner: !!selectedPrize,
+          lottery_record: { id: record.id, created_at: record.created_at },
+          lottery_code: {
+            code: lc.code,
+            participant_info: { email: (lc.participant_info as Record<string, unknown>)?.email },
+          },
+        }
+        if (selectedPrize) {
+          data.prize = {
+            id: selectedPrize.id,
+            name: selectedPrize.name,
+            description: selectedPrize.description,
+          }
+        }
+        return {
+          responseData: data,
+          message: selectedPrize ? '恭喜您中奖了！' : '很遗憾，您没有中奖',
+        }
+      })
+
+      res.json({ success: true, data: responseData, message })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
 
 /**
  * @route   POST /api/lottery/activities/:id/offline-draw
