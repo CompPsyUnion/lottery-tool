@@ -411,7 +411,7 @@
     </form>
 
     <!-- 粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S）；取消语义由离开守卫接管 -->
-    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" :labels="saveLabels" />
+    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" />
   </div>
 </template>
 
@@ -554,19 +554,6 @@ const isDirty = computed(() => serializeForm(form.values) !== originalSnapshot.v
 
 // 保存中状态（提交期间禁用输入的轻量标记；条内文案由 GuardedSave 自管）
 const isSubmitting = ref(false)
-
-const saveLabels = {
-  save: '保存',
-  discard: '放弃更改',
-  saved: '已保存',
-  saving: '保存中…',
-  dialogTitle: '有未保存的更改',
-  dialogDescription: '离开将丢失未保存的更改。要先保存吗？',
-  dialogSave: '保存并离开',
-  dialogDiscard: '放弃更改',
-  dialogCancel: '留在本页',
-  unloadWarning: '有未保存的更改，确定离开？',
-}
 
 // 加载活动数据（编辑模式）
 const loadActivity = async () => {

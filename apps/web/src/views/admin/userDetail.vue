@@ -118,7 +118,7 @@
     </form>
 
     <!-- 粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S） -->
-    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" :labels="saveLabels" />
+    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" />
   </div>
 </template>
 
@@ -215,18 +215,6 @@ const userTimeInfo = ref<{ created_at: string; updated_at: string } | null>(null
 const serializeForm = (values: unknown): string => JSON.stringify(values)
 const originalSnapshot = ref('')
 const isDirty = computed(() => serializeForm(form.values) !== originalSnapshot.value)
-const saveLabels = {
-  save: '保存',
-  discard: '放弃更改',
-  saved: '已保存',
-  saving: '保存中…',
-  dialogTitle: '有未保存的更改',
-  dialogDescription: '离开将丢失未保存的更改。要先保存吗？',
-  dialogSave: '保存并离开',
-  dialogDiscard: '放弃更改',
-  dialogCancel: '留在本页',
-  unloadWarning: '有未保存的更改，确定离开？',
-}
 
 // 加载用户数据（编辑模式）
 const loadUser = async () => {

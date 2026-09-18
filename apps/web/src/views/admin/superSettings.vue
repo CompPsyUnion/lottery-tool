@@ -140,12 +140,7 @@
     </div>
 
     <!-- 邮件配置草稿的粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S） -->
-    <GuardedSave
-      :dirty="mailDirty"
-      :on-save="saveMail"
-      :on-discard="discardMail"
-      :labels="saveLabels"
-    />
+    <GuardedSave :dirty="mailDirty" :on-save="saveMail" :on-discard="discardMail" />
   </div>
 </template>
 
@@ -181,18 +176,6 @@ const serializeMail = (): string => {
 }
 const mailSnapshot = ref('')
 const mailDirty = computed(() => serializeMail() !== mailSnapshot.value)
-const saveLabels = {
-  save: '保存邮件配置',
-  discard: '放弃更改',
-  saved: '已保存',
-  saving: '保存中…',
-  dialogTitle: '有未保存的更改',
-  dialogDescription: '离开将丢失未保存的邮件配置。要先保存吗？',
-  dialogSave: '保存并离开',
-  dialogDiscard: '放弃更改',
-  dialogCancel: '留在本页',
-  unloadWarning: '有未保存的邮件配置，确定离开？',
-}
 const testTo = ref('')
 const mailMessage = ref('')
 const mailError = ref(false)

@@ -1,5 +1,8 @@
 /* 默认样式合集 */
 @import 'tailwindcss';
+/* vue-guarded-save 在 node_modules 内，Tailwind v4 自动扫描跳过——显式纳入
+   （其类走 shadcn 语义 token，自动套用本站主题色） */
+@source '../node_modules/vue-guarded-save/dist';
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));
