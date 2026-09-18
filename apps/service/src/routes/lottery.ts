@@ -983,10 +983,9 @@ router.post(
         throw createError('VALIDATION_INVALID_FORMAT', '该记录不属于此活动')
       }
 
-      // 校验是线下抽奖记录（有operator_id）
-      if (!record.operator_id) {
-        throw createError('VALIDATION_INVALID_FORMAT', '仅线下抽奖记录支持签字')
-      }
+      // operator_id 有无仅区分抽奖通道（线下=管理员操作 / 线上=参与者自抽，含邮箱即抽），
+      // 不再作为能否签字的判据——补签入口对全部未签记录开放
+      // （原「仅线下抽奖记录支持签字」把邮箱即抽的线上中奖记录也拦在了补签之外）
 
       // 校验已经签过字
       if (record.signature_status === 'signed') {

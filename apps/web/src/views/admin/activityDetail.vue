@@ -396,8 +396,8 @@ const columns: TableColumn[] = [
           [h(Eye, { class: 'w-4 h-4' }), '已签'],
         )
       }
-      // 未签：线下活动的记录提供补签入口（真实/测试记录均可）
-      if (activity.value?.lottery_mode === 'offline') {
+      // 未签：提供补签入口（线下/线上记录均可——邮箱即抽的中奖记录同样可补签）
+      {
         return h(
           'button',
           {
