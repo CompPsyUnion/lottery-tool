@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-6" :class="{ 'pb-20': !isAtBottom }">
+  <div class="space-y-6">
     <PageTitle :title="isEditMode ? '编辑用户' : '创建用户'" />
 
     <!-- 加载状态 -->
@@ -7,7 +7,7 @@
       <div class="text-gray-500">正在加载用户数据...</div>
     </div>
 
-    <form v-else class="space-y-6" @submit.prevent="onSubmit">
+    <form v-else class="space-y-6" @submit.prevent>
       <!-- 基本信息 -->
       <div class="space-y-4">
         <h3 class="text-lg font-medium text-gray-900">基本信息</h3>
@@ -115,22 +115,10 @@
           </div>
         </div>
       </div>
-
-      <!-- 提交按钮 -->
-      <div
-        :class="[
-          'flex space-x-4 transition-all duration-300',
-          isAtBottom
-            ? 'justify-start py-3 border-t static'
-            : 'justify-start fixed bottom-0 z-10 -mx-4 px-4 py-3 w-full bg-white/80 backdrop-blur-lg border-t',
-        ]"
-      >
-        <Button type="button" variant="outline" @click="$router.go(-1)"> 取消 </Button>
-        <Button type="submit" :disabled="isSubmitting">
-          {{ isSubmitting ? '保存中...' : isEditMode ? '更新用户' : '创建用户' }}
-        </Button>
-      </div>
     </form>
+
+    <!-- 粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S） -->
+    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" :labels="saveLabels" />
   </div>
 </template>
 
@@ -141,7 +129,6 @@ import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
 import { toast } from 'vue-sonner'
-import { useScroll } from '@vueuse/core'
 
 import PageTitle from '@/components/ui/text/pageTitle.vue'
 import { Button } from '@/components/ui/button'
@@ -224,14 +211,22 @@ const isLoading = ref(false)
 // 用户时间信息
 const userTimeInfo = ref<{ created_at: string; updated_at: string } | null>(null)
 
-// 滚动监听
-const { y } = useScroll(window)
-const isAtBottom = computed(() => {
-  const scrollHeight = document.documentElement.scrollHeight
-  const clientHeight = document.documentElement.clientHeight
-  const scrollTop = y.value
-  return scrollTop + clientHeight >= scrollHeight - 10 // 10px容差
-})
+// GuardedSave：脏检测基准快照 + 中文文案
+const serializeForm = (values: unknown): string => JSON.stringify(values)
+const originalSnapshot = ref('')
+const isDirty = computed(() => serializeForm(form.values) !== originalSnapshot.value)
+const saveLabels = {
+  save: '保存',
+  discard: '放弃更改',
+  saved: '已保存',
+  saving: '保存中…',
+  dialogTitle: '有未保存的更改',
+  dialogDescription: '离开将丢失未保存的更改。要先保存吗？',
+  dialogSave: '保存并离开',
+  dialogDiscard: '放弃更改',
+  dialogCancel: '留在本页',
+  unloadWarning: '有未保存的更改，确定离开？',
+}
 
 // 加载用户数据（编辑模式）
 const loadUser = async () => {
@@ -259,6 +254,9 @@ const loadUser = async () => {
       created_at: user.created_at,
       updated_at: user.updated_at,
     }
+
+    // 回填完成 → 脏检测基准
+    originalSnapshot.value = serializeForm(form.values)
   } catch (error) {
     console.error('加载用户数据失败:', error)
     toast.error('加载用户数据失败')
@@ -267,8 +265,8 @@ const loadUser = async () => {
   }
 }
 
-// 表单提交
-const onSubmit = form.handleSubmit(async (values) => {
+// 保存（GuardedSave 调用；成功 true 触发闪现，失败 false）
+const onSave = form.handleSubmit(async (values): Promise<boolean> => {
   isSubmitting.value = true
 
   try {
@@ -287,28 +285,34 @@ const onSubmit = form.handleSubmit(async (values) => {
 
       await systemApi.updateUser(userId.value, updateData)
       toast.success('用户更新成功')
-    } else {
-      // 创建用户
-      const createData: CreateUserRequest = {
-        username: values.username,
-        email: values.email,
-        password: values.password!,
-        role: values.role as 'admin' | 'super_admin',
-      }
-
-      await systemApi.createUser(createData)
-      toast.success('用户创建成功')
+      originalSnapshot.value = serializeForm(form.values)
+      return true
     }
 
-    // 返回用户列表
+    // 创建是一次性动作：成功后跳列表
+    const createData: CreateUserRequest = {
+      username: values.username,
+      email: values.email,
+      password: values.password!,
+      role: values.role as 'admin' | 'super_admin',
+    }
+    await systemApi.createUser(createData)
+    toast.success('用户创建成功')
     router.push('/admin/users')
+    return false
   } catch (error) {
     console.error('保存用户失败:', error)
     toast.error(isEditMode.value ? '更新用户失败' : '创建用户失败')
+    return false
   } finally {
     isSubmitting.value = false
   }
 })
+
+// 放弃更改：回填为原始快照
+const onDiscard = () => {
+  form.resetForm({ values: JSON.parse(originalSnapshot.value) })
+}
 
 // 监听路由参数变化
 watch(

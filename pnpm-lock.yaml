@@ -186,6 +186,9 @@ importers:
       vue:
         specifier: ^3.5.18
         version: 3.5.41(typescript@5.8.3)
+      vue-guarded-save:
+        specifier: ^0.2.0
+        version: 0.2.0(vue-router@4.6.4(vue@3.5.41(typescript@5.8.3)))(vue@3.5.41(typescript@5.8.3))
       vue-i18n:
         specifier: ^11.1.11
         version: 11.4.8(vue@3.5.41(typescript@5.8.3))
@@ -3773,6 +3776,13 @@ packages:
     engines: {node: ^14.17.0 || >=16.0.0}
     peerDependencies:
       eslint: '>=6.0.0'
+
+  vue-guarded-save@0.2.0:
+    resolution: {integrity: sha512-vQc5/G96HkPi3zXthViTPY759MSdKoNfLPEe2UX9be5y0NvDC5h1+kdnMyxSllyKI2s2blwndY/AA5/jKzkH7Q==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      vue: ^3.4.0
+      vue-router: ^4.0.0 || ^5.0.0
 
   vue-i18n@11.4.8:
     resolution: {integrity: sha512-0ULeHP6Z9CGvAm67S77ZEp41cfGXIREGL8qfhos2BMgcQQewtQcDKuojt6jjasAD/S8GwfTp2ySPmDSpwvrCMQ==}
@@ -7600,6 +7610,11 @@ snapshots:
       semver: 7.8.5
     transitivePeerDependencies:
       - supports-color
+
+  vue-guarded-save@0.2.0(vue-router@4.6.4(vue@3.5.41(typescript@5.8.3)))(vue@3.5.41(typescript@5.8.3)):
+    dependencies:
+      vue: 3.5.41(typescript@5.8.3)
+      vue-router: 4.6.4(vue@3.5.41(typescript@5.8.3))
 
   vue-i18n@11.4.8(vue@3.5.41(typescript@5.8.3)):
     dependencies:

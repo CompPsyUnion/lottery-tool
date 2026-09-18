@@ -119,9 +119,6 @@
         </p>
 
         <div class="flex flex-wrap items-center gap-2">
-          <Button type="button" :disabled="savingMail" @click="saveMailConfig">
-            保存邮件配置
-          </Button>
           <Button
             type="button"
             variant="outline"
@@ -141,11 +138,19 @@
         </div>
       </div>
     </div>
+
+    <!-- 邮件配置草稿的粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S） -->
+    <GuardedSave
+      :dirty="mailDirty"
+      :on-save="saveMail"
+      :on-discard="discardMail"
+      :labels="saveLabels"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { toast } from 'vue-sonner'
 import PageTitle from '@/components/ui/text/pageTitle.vue'
 import { Button } from '@/components/ui/button'
@@ -168,6 +173,26 @@ const mail = ref({
 })
 const savingMail = ref(false)
 const testing = ref(false)
+
+// GuardedSave：邮件配置草稿脏检测（token 留空 = 未修改，序列化排除该字段）
+const serializeMail = (): string => {
+  const { postAuthToken, ...rest } = mail.value
+  return JSON.stringify({ ...rest, hasToken: postAuthToken !== '' })
+}
+const mailSnapshot = ref('')
+const mailDirty = computed(() => serializeMail() !== mailSnapshot.value)
+const saveLabels = {
+  save: '保存邮件配置',
+  discard: '放弃更改',
+  saved: '已保存',
+  saving: '保存中…',
+  dialogTitle: '有未保存的更改',
+  dialogDescription: '离开将丢失未保存的邮件配置。要先保存吗？',
+  dialogSave: '保存并离开',
+  dialogDiscard: '放弃更改',
+  dialogCancel: '留在本页',
+  unloadWarning: '有未保存的邮件配置，确定离开？',
+}
 const testTo = ref('')
 const mailMessage = ref('')
 const mailError = ref(false)
@@ -182,6 +207,7 @@ onMounted(async () => {
     if (mailRes.config) {
       mail.value = { ...mail.value, ...mailRes.config }
     }
+    mailSnapshot.value = serializeMail()
   } catch (err) {
     toast.error(err instanceof Error ? err.message : '获取设置失败')
   }
@@ -200,7 +226,8 @@ const handleToggle = async (value: boolean) => {
   }
 }
 
-const saveMailConfig = async () => {
+// 保存（GuardedSave 调用；成功 true 触发闪现）
+const saveMail = async (): Promise<boolean> => {
   savingMail.value = true
   mailMessage.value = ''
   try {
@@ -215,11 +242,20 @@ const saveMailConfig = async () => {
     })
     mail.value.postAuthToken = ''
     toast.success('邮件配置已保存')
+    mailSnapshot.value = serializeMail()
+    return true
   } catch (err) {
     toast.error(err instanceof Error ? err.message : '保存失败')
+    return false
   } finally {
     savingMail.value = false
   }
+}
+
+// 放弃更改：回填为快照（token 一并清空——留空即“未修改”语义）
+const discardMail = () => {
+  const restored = JSON.parse(mailSnapshot.value)
+  mail.value = { ...restored, postAuthToken: '' }
 }
 
 const sendTest = async () => {

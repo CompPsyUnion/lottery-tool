@@ -1,8 +1,8 @@
 <template>
-  <div class="space-y-6" :class="{ 'pb-20': !isAtBottom }">
+  <div class="space-y-6">
     <PageTitle title="Create Activity" />
 
-    <form class="space-y-6" @submit="onSubmit">
+    <form class="space-y-6" @submit.prevent>
       <!-- 基本信息 -->
       <div class="space-y-4">
         <h3 class="text-lg font-medium text-gray-900">基本信息</h3>
@@ -408,22 +408,10 @@
           </FormItem>
         </FormField>
       </div>
-
-      <!-- 提交按钮 -->
-      <div
-        :class="[
-          'flex space-x-4 transition-all duration-300',
-          isAtBottom
-            ? 'justify-start py-3 border-t static'
-            : 'justify-start fixed bottom-0 z-10 -mx-4 px-4 py-3 w-full bg-white/80 backdrop-blur-lg border-t',
-        ]"
-      >
-        <Button type="button" variant="outline" @click="$router.go(-1)"> 取消 </Button>
-        <Button type="submit" :disabled="isSubmitting">
-          {{ isSubmitting ? '保存中...' : isEditMode ? '更新活动' : '创建活动' }}
-        </Button>
-      </div>
     </form>
+
+    <!-- 粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S）；取消语义由离开守卫接管 -->
+    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" :labels="saveLabels" />
   </div>
 </template>
 
@@ -435,7 +423,6 @@ import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
 import { toast } from 'vue-sonner'
-import { useScroll } from '@vueuse/core'
 
 import PageTitle from '@/components/ui/text/pageTitle.vue'
 import { Button } from '@/components/ui/button'
@@ -557,17 +544,29 @@ const form = useForm({
   },
 })
 
-// 提交状态
+// 表单值稳定序列化（isDirty 快照对比用）：键排序 + 数值/undefined 归一
+const serializeForm = (values: unknown): string => JSON.stringify(values)
+
+// 原始快照（loadActivity 后 / 创建模式 initialValues）；GuardedSave 的脏检测基准
+const originalSnapshot = ref('')
+
+const isDirty = computed(() => serializeForm(form.values) !== originalSnapshot.value)
+
+// 保存中状态（提交期间禁用输入的轻量标记；条内文案由 GuardedSave 自管）
 const isSubmitting = ref(false)
 
-// 滚动监听
-const { y } = useScroll(window)
-const isAtBottom = computed(() => {
-  const scrollHeight = document.documentElement.scrollHeight
-  const clientHeight = document.documentElement.clientHeight
-  const scrollTop = y.value
-  return scrollTop + clientHeight >= scrollHeight - 10 // 10px容差
-})
+const saveLabels = {
+  save: '保存',
+  discard: '放弃更改',
+  saved: '已保存',
+  saving: '保存中…',
+  dialogTitle: '有未保存的更改',
+  dialogDescription: '离开将丢失未保存的更改。要先保存吗？',
+  dialogSave: '保存并离开',
+  dialogDiscard: '放弃更改',
+  dialogCancel: '留在本页',
+  unloadWarning: '有未保存的更改，确定离开？',
+}
 
 // 加载活动数据（编辑模式）
 const loadActivity = async () => {
@@ -616,6 +615,8 @@ const loadActivity = async () => {
     })
     selectedStatus.value = activity.status
     originalStatus.value = activity.status
+    // 编辑数据回填完成 → 以此为脏检测基准
+    originalSnapshot.value = serializeForm(form.values)
     // 向面包屑提供活动名（Admin > Activities > [活动名] > Edit）
     setActivityName(activity.name || '')
   } catch (error) {
@@ -646,8 +647,8 @@ const statusOptions = computed(() => [
   ...STATUS_TRANSITIONS[originalStatus.value],
 ])
 
-// 表单提交
-const onSubmit = form.handleSubmit(async (values) => {
+// 保存（GuardedSave 调用；返回 true 触发 ✓ 闪现，false 静默）
+const onSave = form.handleSubmit(async (values): Promise<boolean> => {
   isSubmitting.value = true
 
   try {
@@ -687,26 +688,36 @@ const onSubmit = form.handleSubmit(async (values) => {
       // 状态变化走专用端点（基本信息更新之后）
       if (selectedStatus.value !== originalStatus.value) {
         await adminActivityApi.updateActivityStatus(activityId.value, selectedStatus.value)
+        originalStatus.value = selectedStatus.value
       }
       toast.success('活动更新成功')
-    } else {
-      // 创建活动
-      await adminActivityApi.createActivity(formData as CreateActivityRequest)
-      toast.success('活动创建成功')
+      // 保存条模式：留在本页继续编辑，快照前移
+      originalSnapshot.value = serializeForm(form.values)
+      return true
     }
 
-    // 返回活动列表
+    // 创建是一次性动作：成功后跳列表（GuardedSave 不闪现）
+    await adminActivityApi.createActivity(formData as CreateActivityRequest)
+    toast.success('活动创建成功')
     router.push('/admin/activities')
+    return false
   } catch (error) {
     console.error('保存活动失败:', error)
     toast.error(isEditMode.value ? '更新活动失败' : '创建活动失败')
+    return false
   } finally {
     isSubmitting.value = false
   }
 })
 
-// 组件挂载时加载数据
+// 放弃更改：回填为原始快照
+const onDiscard = () => {
+  form.resetForm({ values: JSON.parse(originalSnapshot.value) })
+}
+
+// 组件挂载时加载数据（创建模式以初始值为基准）
 onMounted(() => {
+  if (!isEditMode.value) originalSnapshot.value = serializeForm(form.values)
   loadActivity()
 })
 </script>

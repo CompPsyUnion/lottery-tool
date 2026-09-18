@@ -12,7 +12,7 @@
 
 - **后端**：Node.js + Express + TypeORM 1.1 + PostgreSQL 18（迁移自动生成，启动即应用）
 - **前端**：Vue 3 + vue-router + Vite（SPA，`VITE_API_BASE_URL` 配置 API 地址）
-- **工程化**：pnpm workspace、ESLint 9（typescript-eslint）+ Prettier、husky 提交钩子、GitHub Actions 构建后端镜像至 GHCR
+- **工程化**：pnpm workspace、ESLint 9（typescript-eslint）+ Prettier、husky 提交钩子、GitHub Actions 构建后端镜像至 GHCR；管理端页面表单统一 [vue-guarded-save](https://www.npmjs.com/package/vue-guarded-save) 保存条（脏检测 + 未保存离开守卫 + Cmd/Ctrl+S）
 
 ## 环境
 
