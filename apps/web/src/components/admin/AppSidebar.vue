@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import type { SidebarProps } from '../ui/sidebar'
 import NavMain from '@/components/admin/NavMain.vue'
 import NavUser from '@/components/admin/NavUser.vue'
-import { Bot, Sparkles, Settings2, Users, Gift, ScrollText } from 'lucide-vue-next'
+import { Bot, Sparkles, Settings2, Users, ScrollText } from 'lucide-vue-next'
 import {
   Sidebar,
   SidebarContent,
@@ -141,11 +141,11 @@ const props = withDefaults(defineProps<SidebarProps>(), {
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton size="lg" @click="router.push('/')">
-            <div
-              class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
-            >
-              <Gift class="size-4" />
-            </div>
+            <img
+              src="/favicon.jpeg"
+              alt="Lottery Tool"
+              class="aspect-square size-8 rounded-lg object-cover"
+            />
             <div class="grid flex-1 text-left text-sm leading-tight">
               <span class="truncate font-semibold">Lottery Tool</span>
               <span class="truncate text-xs text-muted-foreground">抽奖系统</span>

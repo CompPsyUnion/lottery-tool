@@ -1,3 +1,5 @@
+import { BRAND_LOGO_DATA_URI } from './mail-brand'
+
 /**
  * 邮件 HTML 模板渲染（email-poster 内置模板，子路径 'email-poster/template'）。
  * 主题贴合 web 端：primary 即 apps/web 的 --primary（oklch 0.208 0.042 265.755 ≈ #0f172b），
@@ -14,6 +16,8 @@ interface EmailThemeLike {
   brandSubtitle: string
   primaryColor: string
   footerHtml: string
+  /** 品牌 logo（data URI 内嵌，不用外链——邮件客户端默认屏蔽远程图片） */
+  logo: string
 }
 
 interface CodeEmailContentLike {
@@ -37,6 +41,7 @@ function siteTheme(): EmailThemeLike {
     brandSubtitle: BRAND_SUBTITLE,
     primaryColor: PRIMARY_COLOR,
     footerHtml: `此邮件由 ${BRAND_TITLE} 系统自动发送，请勿直接回复 · © ${year}`,
+    logo: BRAND_LOGO_DATA_URI,
   }
 }
 
