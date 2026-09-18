@@ -142,9 +142,9 @@
         </button>
       </div>
 
-      <!-- 盒子二：数字键盘（仅桌面和平板显示，且仅offline模式） -->
+      <!-- 盒子二：数字键盘（仅桌面和平板显示，offline 模式且未开启邮箱即抽） -->
       <div
-        v-if="activityInfo?.lottery_mode === 'offline'"
+        v-if="activityInfo?.lottery_mode === 'offline' && !emailDrawEnabled"
         class="keyboard-box bg-white bg-opacity-90 backdrop-blur-sm p-6 hidden md:block"
       >
         <h3 class="text-lg font-semibold text-gray-800 mb-4 text-center">数字键盘</h3>
@@ -405,7 +405,8 @@ const emailPolling = ref(false)
 let emailPollStopped = true
 /** 结果来自提交页长轮询（本机无抽奖码，撤销仅在邮件链接打开的设备上可用） */
 const resultFromPoll = ref(false)
-/** 邮件链接 ?edraw=code：预填并自动以公开 draw 执行（无视 offline 登录门槛） */
+/** 旧版邮件链接 ?edraw=code 的兼容入口（新邮件已指向 /edraw/:activityId 子页）；
+ *  仍自动以公开 draw 执行（无视 offline 登录门槛） */
 const edrawCode = urlParams.get('edraw')
 if (edrawCode) lotteryCode.value = edrawCode
 /** 「点击链接显示结果」默认关闭：链接设备仅确认参与，结果只在原提交页（大屏）展示 */

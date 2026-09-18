@@ -593,7 +593,8 @@ router.post(
         req.get('origin') ||
         (req.get('referer') ? new URL(req.get('referer')!).origin : undefined) ||
         `${req.protocol}://${req.get('host')}`
-      const link = `${frontendBase}/lottery?activityId=${activityId}&edraw=${lotteryCode.code}`
+      // 独立确认子页（不占用 /lottery 主路由——提交页在那边长轮询，互不干扰）
+      const link = `${frontendBase}/edraw/${activityId}?code=${lotteryCode.code}`
 
       await MailService.sendMail(mailConfig, {
         to: email,
