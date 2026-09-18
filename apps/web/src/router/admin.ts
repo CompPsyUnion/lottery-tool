@@ -121,6 +121,14 @@ const adminRoutes: RouteRecordRaw[] = [
         },
       },
       {
+        path: 'audit',
+        name: 'Audit Log',
+        component: () => import('../views/admin/auditLog.vue'),
+        meta: {
+          title: 'Audit',
+        },
+      },
+      {
         path: 'settings',
         name: 'Settings',
         component: () => import('../views/admin/settings.vue'),

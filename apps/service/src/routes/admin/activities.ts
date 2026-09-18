@@ -13,6 +13,7 @@ import {
 } from '../../utils/lottery-code-generator'
 import { AppDataSource } from '../../utils/database'
 import { requireActivityAccess as requireActivityAccessShared } from '../../middleware/activity-access'
+import * as AuditService from '../../services/audit.service'
 import { Activity } from '../../entities/activity.entity'
 import { LotteryCode } from '../../entities/lottery-code.entity'
 import * as ActivityService from '../../services/activity.service'
@@ -942,6 +943,19 @@ router.post(
         mode,
       )
 
+      // 审计：导入/覆盖（码量净变化 = 新建 - 删除；库存不动）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: result.mode === 'replace' ? 'CODE_REPLACE' : 'CODE_IMPORT',
+        delta: result.created.length - result.deleted_count,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `${result.mode === 'replace' ? '覆盖导入' : '导入'}：新增 ${result.created.length}，更新 ${result.updated.length}，删除 ${result.deleted_count}，失败 ${result.failed.length}${result.records_deleted > 0 ? `（级联记录 ${result.records_deleted}）` : ''}`,
+      })
+
       // 全部行失败也返回 200：行级报告即载荷；400 仅用于结构错误与配额超限
       res.status(200).json({
         success: true,
@@ -989,6 +1003,19 @@ router.post(
 
       const deletedIds = new Set(result.deleted.map((c) => c.id))
       const usedDeleted = result.deleted.filter((c) => c.status === 'used').length
+
+      // 审计：码删除（码量净减少；含级联记录数）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: 'CODE_DELETE',
+        delta: -result.deleted.length,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `删除抽奖码 ${result.deleted.length} 个（含已使用 ${result.deleted.filter((c) => c.status === 'used').length}，级联记录 ${result.records_deleted}）`,
+      })
 
       res.json({
         success: true,
@@ -1362,6 +1389,21 @@ router.post(
         remaining_quantity: total_quantity,
         probability,
         sort_order: sort_order || 0,
+      })
+
+      // 审计：奖品创建（库存从 0 到 total）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: 'PRIZE_CREATE',
+        prize_name: prize.name,
+        quantity_before: 0,
+        quantity_after: prize.remaining_quantity,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `新增奖品「${prize.name}」（总量 ${prize.total_quantity}）`,
       })
 
       res.status(201).json({

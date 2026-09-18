@@ -16,6 +16,7 @@ import * as PrizeService from '../services/prize.service'
 import * as LotteryRecordService from '../services/lottery-record.service'
 import * as MailService from '../services/mail.service'
 import { checkEmailDrawSendLimit } from '../services/email-code.service'
+import * as AuditService from '../services/audit.service'
 import { OPERATION_TYPES, log as writeOperationLog } from '../services/operation-log.service'
 
 const router = express.Router()
@@ -206,6 +207,22 @@ router.post(
               description: demoPrize.description,
             }
           }
+          // 审计：测试码抽奖（无库存副作用，前后相同；is_test 标记）
+          await AuditService.record(
+            {
+              activity_id: parseInt(activityId),
+              action: 'DRAW_TEST',
+              lottery_code: lotteryCodeRecord.code,
+              prize_name: demoPrize ? demoPrize.name : null,
+              quantity_before: demoPrize ? demoPrize.remaining_quantity : null,
+              quantity_after: demoPrize ? demoPrize.remaining_quantity : null,
+              is_test: true,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+              detail: demoWinner ? '测试抽奖中奖（无副作用）' : '测试抽奖未中奖（无副作用）',
+            },
+            manager,
+          )
           return {
             responseData: demoData,
             message: demoWinner ? '恭喜您中奖了！' : '很遗憾，您没有中奖',
@@ -243,6 +260,9 @@ router.post(
           { manager },
         )
 
+        // 库存前值留存（审计用）
+        const stockBefore = selectedPrizeRecord ? selectedPrizeRecord.remaining_quantity : null
+
         if (selectedPrizeRecord && selectedPrizeRecord.remaining_quantity > 0) {
           isWinner = true
           selectedPrize = selectedPrizeRecord
@@ -266,6 +286,28 @@ router.post(
             is_winner: isWinner,
             ip_address: req.ip,
             user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+
+        // 审计：本次抽奖的库存前后与参与者（同一事务，与库存变更原子）
+        const participantInfoBody = (req.body.participant_info || {}) as {
+          name?: string
+          email?: string
+        }
+        await AuditService.record(
+          {
+            activity_id: parseInt(activityId),
+            action: 'DRAW_ONLINE',
+            lottery_code: lotteryCodeRecord.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: stockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : stockBefore,
+            actor_type: participantInfoBody.email ? 'participant' : 'system',
+            actor: participantInfoBody.email || participantInfoBody.name || null,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: isWinner ? '线上抽奖中奖' : '线上抽奖未中奖',
           },
           manager,
         )
@@ -360,6 +402,10 @@ router.post(
       }
 
       await AppDataSource.transaction(async (manager) => {
+        // 恢复前库存留存（审计用）
+        const restoreBefore =
+          record.is_winner && record.prize ? record.prize.remaining_quantity : null
+
         // 中奖恢复库存（未中奖无奖品可恢复）
         if (record.is_winner && record.prize_id) {
           await PrizeService.restoreStock(record.prize!, 1, manager)
@@ -368,6 +414,26 @@ router.post(
         await LotteryCodeService.markAsUnused(record.lotteryCode!, manager)
         // 删除本次记录
         await manager.getRepository(LotteryRecord).remove(record)
+
+        // 审计：撤销抽奖（库存恢复前后与邮箱凭证，同一事务）
+        await AuditService.record(
+          {
+            activity_id: activityId,
+            action: 'UNDO_DRAW',
+            lottery_code: record.lotteryCode!.code,
+            prize_name: record.prize ? record.prize.name : null,
+            quantity_before: restoreBefore,
+            quantity_after:
+              record.is_winner && record.prize ? record.prize.remaining_quantity : restoreBefore,
+            actor_type: 'email',
+            actor: record.lotteryCode!.participant_info?.email || null,
+            is_test: false,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: record.is_winner ? '撤销中奖抽奖，库存恢复' : '撤销未中奖抽奖',
+          },
+          manager,
+        )
       })
 
       await writeOperationLog({
@@ -534,6 +600,19 @@ router.post(
         subject: `抽奖参与确认：「${activity.name}」`,
         body: await renderEmailDrawMail(activity.name, link),
         html: true,
+      })
+
+      // 审计：邮箱即抽建码（码量 +1，不动库存）
+      await AuditService.record({
+        activity_id: activityId,
+        action: 'CODE_CREATE',
+        lottery_code: lotteryCode.code,
+        delta: 1,
+        actor_type: 'email',
+        actor: email,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: '邮箱即抽请求建码',
       })
 
       await writeOperationLog({
@@ -745,6 +824,8 @@ router.post(
 
         let isWinner = false
         let selectedPrize: Prize | null = null
+        // 库存前值留存（审计用；两分支统一）
+        let offlineStockBefore: number | null = null
 
         // 如果指定了奖品ID，使用指定奖品
         if (prize_id) {
@@ -759,6 +840,7 @@ router.post(
 
           isWinner = true
           selectedPrize = prize
+          offlineStockBefore = prize.remaining_quantity
           await PrizeService.deductStock(selectedPrize, 1, manager)
         } else {
           // 使用概率抽奖
@@ -771,10 +853,12 @@ router.post(
           if (selectedPrizeRecord && selectedPrizeRecord.remaining_quantity > 0) {
             isWinner = true
             selectedPrize = selectedPrizeRecord
+            offlineStockBefore = selectedPrizeRecord.remaining_quantity
             await PrizeService.deductStock(selectedPrize, 1, manager)
           } else {
             isWinner = false
             selectedPrize = null
+            offlineStockBefore = selectedPrizeRecord ? selectedPrizeRecord.remaining_quantity : null
           }
         }
 
@@ -791,6 +875,25 @@ router.post(
             operator_id: (req as any).user.id,
             ip_address: req.ip,
             user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+
+        // 审计：线下抽奖库存前后与操作管理员（同一事务）
+        await AuditService.record(
+          {
+            activity_id: parseInt(activityId),
+            action: 'DRAW_OFFLINE',
+            lottery_code: lotteryCodeRecord.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: offlineStockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : offlineStockBefore,
+            actor_type: 'admin',
+            actor: (req as any).user.username,
+            user_id: (req as any).user.id,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: isWinner ? `线下抽奖中奖${prize_id ? '（指定奖品）' : ''}` : '线下抽奖未中奖',
           },
           manager,
         )

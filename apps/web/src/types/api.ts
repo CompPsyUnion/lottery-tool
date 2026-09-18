@@ -311,6 +311,49 @@ export interface LotteryCodeListParams extends SearchParams {
   has_participant_info?: boolean
 }
 
+// ==================== 审计日志 ====================
+
+/** 审计动作（与后端 AUDIT_ACTIONS 对齐） */
+export type AuditAction =
+  | 'DRAW_ONLINE'
+  | 'DRAW_OFFLINE'
+  | 'DRAW_TEST'
+  | 'UNDO_DRAW'
+  | 'RECORD_DELETE'
+  | 'PRIZE_CREATE'
+  | 'PRIZE_UPDATE'
+  | 'PRIZE_DELETE'
+  | 'CODE_CREATE'
+  | 'CODE_IMPORT'
+  | 'CODE_REPLACE'
+  | 'CODE_DELETE'
+
+export interface AuditLog {
+  id: number
+  activity_id: number
+  action: AuditAction
+  lottery_code?: string | null
+  prize_name?: string | null
+  quantity_before?: number | null
+  quantity_after?: number | null
+  delta: number
+  actor_type: 'admin' | 'participant' | 'email' | 'system'
+  actor?: string | null
+  user_id?: number | null
+  is_test: boolean
+  ip_address?: string | null
+  detail?: string | null
+  created_at: string
+}
+
+export interface AuditListParams {
+  page?: number
+  limit?: number
+  activity_id?: number
+  action?: AuditAction
+  code?: string
+}
+
 // ==================== 抽奖码批量管理 ====================
 
 export interface ImportLotteryCodeRow {

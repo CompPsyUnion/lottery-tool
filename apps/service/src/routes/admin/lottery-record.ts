@@ -7,6 +7,7 @@ import * as PrizeService from '../../services/prize.service'
 import * as LotteryCodeService from '../../services/lottery-code.service'
 import * as OperationLogService from '../../services/operation-log.service'
 import { requireActivityAccess } from '../../middleware/activity-access'
+import * as AuditService from '../../services/audit.service'
 import { createError } from '../../utils/custom-error'
 import moment from 'moment'
 
@@ -376,6 +377,9 @@ router.delete(
 
       await AppDataSource.transaction(async (manager) => {
         for (const record of records) {
+          // 恢复前库存留存（审计用）
+          const before = record.prize ? record.prize.remaining_quantity : null
+
           // 恢复奖品库存
           if (record.prize) {
             await PrizeService.restoreStock(record.prize, 1, manager)
@@ -385,6 +389,25 @@ router.delete(
           if (record.lotteryCode) {
             await LotteryCodeService.markAsUnused(record.lotteryCode, manager)
           }
+
+          // 审计：管理员删除记录 → 库存恢复（同一事务）
+          await AuditService.record(
+            {
+              activity_id: record.activity_id,
+              action: 'RECORD_DELETE',
+              lottery_code: record.lotteryCode ? record.lotteryCode.code : null,
+              prize_name: record.prize ? record.prize.name : null,
+              quantity_before: before,
+              quantity_after: record.prize ? record.prize.remaining_quantity : before,
+              actor_type: 'admin',
+              actor: (req as any).user.username,
+              user_id: (req as any).user.id,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+              detail: `管理员删除抽奖记录 #${record.id}（恢复库存）`,
+            },
+            manager,
+          )
         }
 
         // 批量删除记录
@@ -442,6 +465,9 @@ router.delete(
       assertRecordsAccessible([record], req)
 
       await AppDataSource.transaction(async (manager) => {
+        // 恢复前库存留存（审计用）
+        const before = record.prize ? record.prize.remaining_quantity : null
+
         // 恢复奖品库存
         if (record.prize) {
           await PrizeService.restoreStock(record.prize, 1, manager)
@@ -451,6 +477,25 @@ router.delete(
         if (record.lotteryCode) {
           await LotteryCodeService.markAsUnused(record.lotteryCode, manager)
         }
+
+        // 审计：管理员删除记录 → 库存恢复（同一事务）
+        await AuditService.record(
+          {
+            activity_id: record.activity_id,
+            action: 'RECORD_DELETE',
+            lottery_code: record.lotteryCode ? record.lotteryCode.code : null,
+            prize_name: record.prize ? record.prize.name : null,
+            quantity_before: before,
+            quantity_after: record.prize ? record.prize.remaining_quantity : before,
+            actor_type: 'admin',
+            actor: (req as any).user.username,
+            user_id: (req as any).user.id,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: `管理员删除抽奖记录 #${record.id}（恢复库存）`,
+          },
+          manager,
+        )
 
         // 删除记录
         await manager.getRepository(LotteryRecord).remove(record)

@@ -2,6 +2,7 @@ import express, { Request, Response, NextFunction } from 'express'
 import { body, validationResult } from 'express-validator'
 import { logPrizeOperation } from '../../middleware/operation-logger'
 import { createError } from '../../utils/custom-error'
+import * as AuditService from '../../services/audit.service'
 import { AppDataSource } from '../../utils/database'
 import { Prize } from '../../entities/prize.entity'
 import * as PrizeService from '../../services/prize.service'
@@ -131,6 +132,21 @@ router.put(
 
       const updated = await PrizeService.updatePrize(prize, updateData)
 
+      // 审计：奖品更新（库存/总量前后）
+      await AuditService.record({
+        activity_id: prize.activity_id,
+        action: 'PRIZE_UPDATE',
+        prize_name: updated.name,
+        quantity_before: prize.remaining_quantity,
+        quantity_after: updated.remaining_quantity,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `更新奖品「${updated.name}」：总量 ${prize.total_quantity}→${updated.total_quantity}，剩余 ${prize.remaining_quantity}→${updated.remaining_quantity}`,
+      })
+
       res.json({
         success: true,
         data: {
@@ -177,6 +193,21 @@ router.delete(
       }
 
       await AppDataSource.getRepository(Prize).remove(prize)
+
+      // 审计：奖品删除（未发出才可删，剩余清零）
+      await AuditService.record({
+        activity_id: prize.activity_id,
+        action: 'PRIZE_DELETE',
+        prize_name: prize.name,
+        quantity_before: prize.remaining_quantity,
+        quantity_after: 0,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `删除奖品「${prize.name}」（剩余 ${prize.remaining_quantity} 清零）`,
+      })
 
       res.json({
         success: true,

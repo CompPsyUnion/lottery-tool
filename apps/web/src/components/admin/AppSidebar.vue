@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import type { SidebarProps } from '../ui/sidebar'
 import NavMain from '@/components/admin/NavMain.vue'
 import NavUser from '@/components/admin/NavUser.vue'
-import { Bot, Sparkles, Settings2, Users, Gift } from 'lucide-vue-next'
+import { Bot, Sparkles, Settings2, Users, Gift, ScrollText } from 'lucide-vue-next'
 import {
   Sidebar,
   SidebarContent,
@@ -85,6 +85,11 @@ const data = ref<{
           url: '/admin/users/add',
         },
       ],
+    },
+    {
+      title: 'Audit',
+      url: '/admin/audit',
+      icon: ScrollText,
     },
     {
       title: 'Settings',

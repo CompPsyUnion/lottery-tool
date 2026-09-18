@@ -39,6 +39,8 @@ import type {
   BatchDeleteLotteryCodesRequest,
   BatchDeleteLotteryCodesResponse,
   UpdateParticipantInfoRequest,
+  AuditLog,
+  AuditListParams,
 } from './types/api'
 
 // API 基础配置
@@ -282,6 +284,17 @@ export const lotteryApi = {
       {},
       false,
     )
+  },
+}
+
+// 审计日志 API
+export const adminAuditApi = {
+  // 分页查询（普通管理员仅自己活动，超管全量）
+  async list(params: AuditListParams = {}): Promise<{ logs: AuditLog[]; pagination: Pagination }> {
+    const queryString = buildQueryParams(
+      params as unknown as Record<string, string | number | boolean | undefined>,
+    )
+    return apiFetch(`/admin/audit${queryString}`)
   },
 }
 
@@ -672,6 +685,7 @@ export const API = {
   auth: authApi,
   lottery: lotteryApi,
   system: systemApi,
+  adminAudit: adminAuditApi,
   adminActivity: adminActivityApi,
   adminPrize: adminPrizeApi,
   stats: statsApi,

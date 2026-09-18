@@ -13,6 +13,7 @@ import logger from '../utils/logger'
 import * as LotteryCodeService from '../services/lottery-code.service'
 import * as MailService from '../services/mail.service'
 import * as OperationLogService from '../services/operation-log.service'
+import * as AuditService from '../services/audit.service'
 import { AppDataSource } from '../utils/database'
 import { LotteryCode } from '../entities/lottery-code.entity'
 
@@ -298,6 +299,18 @@ router.post(
         }
         throw error
       }
+
+      // 审计：kdocs 建码
+      await AuditService.record({
+        activity_id: activity.id,
+        action: 'CODE_CREATE',
+        lottery_code: code,
+        delta: 1,
+        actor_type: 'system',
+        detail: '金山表单 webhook 建码',
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
 
       await OperationLogService.log({
         user_id: null, // 表单侧调用没有用户ID
