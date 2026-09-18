@@ -114,18 +114,35 @@ const activitySettingsValidators = [
     .optional()
     .isInt({ min: 1, max: 10 })
     .withMessage('每邮箱参与次数必须是1-10的整数'),
+
+  body('settings.email_draw.show_result_on_click')
+    .optional()
+    .isBoolean()
+    .withMessage('点击链接显示结果开关必须是布尔值'),
 ]
 
 /** 邮箱即抽配置归一化：后缀统一带 @ 前缀；返回 undefined 表示请求未涉及该键 */
 const normalizeEmailDrawPatch = (
   settings: Record<string, unknown>,
-): { enabled?: boolean; domain_suffix?: string; max_per_email?: number } | undefined => {
+):
+  | {
+      enabled?: boolean
+      domain_suffix?: string
+      max_per_email?: number
+      show_result_on_click?: boolean
+    }
+  | undefined => {
   if (settings.email_draw === undefined) return undefined
   const raw =
     settings.email_draw && typeof settings.email_draw === 'object'
       ? (settings.email_draw as Record<string, unknown>)
       : {}
-  const patch: { enabled?: boolean; domain_suffix?: string; max_per_email?: number } = {}
+  const patch: {
+    enabled?: boolean
+    domain_suffix?: string
+    max_per_email?: number
+    show_result_on_click?: boolean
+  } = {}
   if (raw.enabled !== undefined) patch.enabled = raw.enabled === true
   if (typeof raw.domain_suffix === 'string' && raw.domain_suffix !== '') {
     patch.domain_suffix = raw.domain_suffix.startsWith('@')
@@ -134,6 +151,9 @@ const normalizeEmailDrawPatch = (
   }
   if (raw.max_per_email !== undefined) {
     patch.max_per_email = Number.parseInt(String(raw.max_per_email), 10) || 1
+  }
+  if (raw.show_result_on_click !== undefined) {
+    patch.show_result_on_click = raw.show_result_on_click === true
   }
   return patch
 }

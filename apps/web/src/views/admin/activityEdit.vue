@@ -368,6 +368,45 @@
             </FormItem>
           </FormField>
         </div>
+
+        <FormField
+          v-slot="{ field: componentField }"
+          name="settings.email_draw.show_result_on_click"
+        >
+          <FormItem class="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div class="space-y-0.5">
+              <FormLabel class="text-base">点击链接直接显示结果</FormLabel>
+              <FormDescription>
+                开启：手机点开邮件链接后直接显示抽奖结果（与大屏一致）；
+                关闭：点击仅确认参与，提示回到原提交页面（大屏）查看结果。
+              </FormDescription>
+            </div>
+            <FormControl>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="(componentField as any).value"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                  (componentField as any).value ? 'bg-blue-600' : 'bg-gray-200',
+                ]"
+                @click="
+                  form.setFieldValue(
+                    'settings.email_draw.show_result_on_click',
+                    !(componentField as any).value,
+                  )
+                "
+              >
+                <span
+                  :class="[
+                    'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    (componentField as any).value ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </FormControl>
+          </FormItem>
+        </FormField>
       </div>
 
       <!-- 提交按钮 -->
@@ -472,6 +511,7 @@ const formSchema = toTypedSchema(
                 .regex(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, '邮箱后缀格式不正确（如 @unnc.edu.cn）')
                 .optional(),
               max_per_email: z.coerce.number().min(1, '至少 1 次').max(10, '最多 10 次').optional(),
+              show_result_on_click: z.boolean().optional(),
             })
             .optional(),
         })
@@ -507,7 +547,12 @@ const form = useForm({
       kdocs_field_map: { name: '', student_id: '', email: '', phone: '' },
       kdocs_bind_code: '',
       kdocs_notify: true,
-      email_draw: { enabled: false, domain_suffix: '', max_per_email: 1 },
+      email_draw: {
+        enabled: false,
+        domain_suffix: '',
+        max_per_email: 1,
+        show_result_on_click: true,
+      },
     },
   },
 })
@@ -565,6 +610,7 @@ const loadActivity = async () => {
           enabled: activity.settings?.email_draw?.enabled === true,
           domain_suffix: activity.settings?.email_draw?.domain_suffix || '',
           max_per_email: activity.settings?.email_draw?.max_per_email || 1,
+          show_result_on_click: activity.settings?.email_draw?.show_result_on_click !== false,
         },
       },
     })
@@ -630,6 +676,7 @@ const onSubmit = form.handleSubmit(async (values) => {
           enabled: values.settings?.email_draw?.enabled === true,
           domain_suffix: values.settings?.email_draw?.domain_suffix?.trim() || undefined,
           max_per_email: values.settings?.email_draw?.max_per_email || 1,
+          show_result_on_click: values.settings?.email_draw?.show_result_on_click !== false,
         },
       },
     }

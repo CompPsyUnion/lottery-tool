@@ -43,6 +43,15 @@
           </p>
         </div>
 
+        <!-- 邮箱链接确认完成（活动关闭了点击设备展示结果）：仅确认，回原页面查看 -->
+        <div v-if="edrawConfirmedNotice" class="mb-6">
+          <div class="rounded-xl border border-green-100 bg-green-50 p-6 text-center space-y-3">
+            <div class="text-4xl">✅</div>
+            <p class="text-lg font-semibold text-green-800">已完成抽奖确认</p>
+            <p class="text-sm text-green-700">抽奖结果请在您提交邮箱的页面（大屏）上查看</p>
+          </div>
+        </div>
+
         <!-- 邮箱即抽：等待确认（已发邮件，长轮询结果中） -->
         <div v-if="emailDrawWaiting" class="mb-6 space-y-4">
           <div class="rounded-xl border border-blue-100 bg-blue-50 p-5 text-center space-y-3">
@@ -64,8 +73,8 @@
           <button class="draw-button" @click="cancelEmailWait">取消等待</button>
         </div>
 
-        <!-- 邮箱即抽：前缀输入（替代抽奖码输入） -->
-        <div v-else-if="emailDrawEnabled" class="mb-6">
+        <!-- 邮箱即抽：前缀输入（替代抽奖码输入；确认完成后隐藏） -->
+        <div v-else-if="emailDrawEnabled && !edrawConfirmedNotice" class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
           <div class="flex items-center">
             <Input
@@ -81,8 +90,8 @@
           </p>
         </div>
 
-        <!-- 抽奖码输入框（未开启邮箱即抽的常规入口） -->
-        <div v-else class="mb-6">
+        <!-- 抽奖码输入框（未开启邮箱即抽的常规入口；确认完成后隐藏） -->
+        <div v-else-if="!edrawConfirmedNotice" class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">抽奖码</label>
           <Input
             v-model="lotteryCode"
@@ -114,7 +123,7 @@
 
         <!-- 立即抽奖按钮（邮箱即抽：提交前缀发确认邮件） -->
         <button
-          v-if="emailDrawEnabled"
+          v-if="emailDrawEnabled && !edrawConfirmedNotice"
           :disabled="!emailPrefix.trim() || isDrawing"
           class="draw-button"
           @click="handleRequestEmailDraw"
@@ -122,7 +131,12 @@
           <Gift class="w-5 h-5" />
           {{ isDrawing ? '发送中...' : '参与抽奖' }}
         </button>
-        <button v-else :disabled="!canDraw || isDrawing" class="draw-button" @click="handleDraw()">
+        <button
+          v-else-if="!edrawConfirmedNotice"
+          :disabled="!canDraw || isDrawing"
+          class="draw-button"
+          @click="handleDraw()"
+        >
           <Gift class="w-5 h-5" />
           {{ isDrawing ? '抽奖中...' : '立即抽奖' }}
         </button>
@@ -394,6 +408,11 @@ const resultFromPoll = ref(false)
 /** 邮件链接 ?edraw=code：预填并自动以公开 draw 执行（无视 offline 登录门槛） */
 const edrawCode = urlParams.get('edraw')
 if (edrawCode) lotteryCode.value = edrawCode
+/** 活动关闭「点击链接显示结果」：链接设备仅确认参与，结果只在原提交页（大屏）展示 */
+const edrawHideResult = computed(
+  () => activityInfo.value?.settings?.email_draw?.show_result_on_click === false,
+)
+const edrawConfirmedNotice = ref(false)
 
 // 参与者信息（仅online模式需要）
 const participantInfo = ref({
@@ -581,6 +600,12 @@ const handleDraw = async (opts?: { forceOnline?: boolean }) => {
       drawResponse = await adminActivityApi.offlineDraw(activityId, {
         lottery_code: lotteryCode.value,
       })
+    }
+
+    // 邮箱链接路径 + 活动配置「点击不显示结果」：仅确认参与（结果与 toast 都不在本机展示）
+    if (forceOnline && edrawHideResult.value) {
+      edrawConfirmedNotice.value = true
+      return
     }
 
     // 统一处理抽奖结果

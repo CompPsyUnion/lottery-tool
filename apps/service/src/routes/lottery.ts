@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { body, validationResult } from 'express-validator'
-import { optionalAuth, authenticateToken, requireAdmin } from '../middleware/auth'
+import { authenticateToken, requireAdmin } from '../middleware/auth'
 import { logLotteryDraw } from '../middleware/operation-logger'
 import { createError } from '../utils/custom-error'
 import { AppDataSource } from '../utils/database'
@@ -107,6 +107,8 @@ router.get('/activities/:id', async (req: Request, res: Response, next: NextFunc
               enabled: getEmailDrawSettings(activity).enabled === true,
               domain_suffix: getEmailDrawSettings(activity).domain_suffix || '',
               max_per_email: getEmailDrawSettings(activity).max_per_email || 1,
+              // false = 点击链接的设备仅确认参与，提示回原提交页（大屏）查看结果
+              show_result_on_click: getEmailDrawSettings(activity).show_result_on_click !== false,
             },
           },
         },
@@ -400,6 +402,8 @@ interface EmailDrawSettings {
   enabled?: boolean
   domain_suffix?: string
   max_per_email?: number
+  /** 点击链接设备是否直接显示结果（默认 true；false=仅确认，回原提交页查看） */
+  show_result_on_click?: boolean
 }
 
 const getEmailDrawSettings = (activity: Activity): EmailDrawSettings => {
