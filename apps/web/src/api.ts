@@ -288,13 +288,13 @@ export const lotteryApi = {
     )
   },
 
-  // 邮箱即抽确认链接执行（码 + 防伪令牌双凭证）
-  async confirmEmailDraw(id: number, code: string, token: string): Promise<DrawLotteryResponse> {
+  // 邮箱即抽确认链接执行（码即凭证，只发给本人邮箱）
+  async confirmEmailDraw(id: number, code: string): Promise<DrawLotteryResponse> {
     return apiFetch(
       `/lottery/activities/${id}/email-draw/confirm`,
       {
         method: 'POST',
-        body: JSON.stringify({ code, token }),
+        body: JSON.stringify({ code }),
       },
       false,
     )

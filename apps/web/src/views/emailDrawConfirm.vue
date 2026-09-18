@@ -83,7 +83,6 @@ const router = useRouter()
 const userStore = useUserStore()
 const activityId = Number(route.params.activityId)
 const edrawCode = route.query.code as string
-const edrawToken = route.query.t as string
 
 // 抽奖执行态
 const result = ref<{
@@ -106,7 +105,7 @@ const execute = async () => {
       }
     }
 
-    const res = await lotteryApi.confirmEmailDraw(activityId, edrawCode, edrawToken)
+    const res = await lotteryApi.confirmEmailDraw(activityId, edrawCode)
     result.value = { is_winner: res.is_winner, prize: res.prize || null }
     done.value = true
 
@@ -125,8 +124,8 @@ const execute = async () => {
 }
 
 onMounted(() => {
-  if (!activityId || !edrawCode || !edrawToken) {
-    error.value = '链接无效（缺少活动、抽奖码或令牌参数）'
+  if (!activityId || !edrawCode) {
+    error.value = '链接无效（缺少活动或抽奖码参数）'
     return
   }
   execute()

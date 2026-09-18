@@ -55,7 +55,7 @@
         <!-- 邮箱即抽：等待确认（已发邮件，长轮询结果中） -->
         <div v-if="emailDrawWaiting" class="mb-6 space-y-4">
           <div class="rounded-xl border border-blue-100 bg-blue-50 p-5 text-center space-y-3">
-            <div class="text-3xl">📧</div>
+            <div class="text-3xl">😈</div>
             <p class="text-sm text-slate-700">
               确认邮件已发送至<br />
               <span class="font-mono font-medium">{{ emailDrawEmail }}</span>
