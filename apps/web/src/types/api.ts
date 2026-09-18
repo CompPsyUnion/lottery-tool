@@ -19,7 +19,25 @@ export interface KdocsFieldMap {
   phone?: string
 }
 
-/** 活动设置（settings jsonb） */
+/** 邮箱即抽设置：开启后抽奖页改为邮箱前缀输入，确认邮件链接执行抽奖 */
+export interface EmailDrawSettings {
+  enabled?: boolean
+  /** 统一带 @ 前缀（如 @unnc.edu.cn） */
+  domain_suffix?: string
+  /** 同一邮箱在本活动的参与次数上限（默认 1） */
+  max_per_email?: number
+}
+
+/** 邮箱即抽状态（提交页长轮询；drawn 附结果摘要，不含抽奖码） */
+export interface EmailDrawStatus {
+  state: 'none' | 'pending' | 'drawn'
+  result?: {
+    is_winner: boolean
+    prize: { name: string; description?: string | null } | null
+    created_at?: string | null
+  }
+}
+
 export interface ActivitySettings {
   max_lottery_codes?: number
   lottery_code_format?:
@@ -35,6 +53,7 @@ export interface ActivitySettings {
   kdocs_field_map?: KdocsFieldMap
   kdocs_bind_code?: string
   kdocs_notify?: boolean
+  email_draw?: EmailDrawSettings
 }
 
 /** 活动 Webhook 接入信息（GET /admin/activities/:id/webhook-info） */

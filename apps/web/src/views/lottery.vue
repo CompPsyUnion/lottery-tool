@@ -43,8 +43,46 @@
           </p>
         </div>
 
-        <!-- 抽奖码输入框 -->
-        <div class="mb-6">
+        <!-- 邮箱即抽：等待确认（已发邮件，长轮询结果中） -->
+        <div v-if="emailDrawWaiting" class="mb-6 space-y-4">
+          <div class="rounded-xl border border-blue-100 bg-blue-50 p-5 text-center space-y-3">
+            <div class="text-3xl">📧</div>
+            <p class="text-sm text-slate-700">
+              确认邮件已发送至<br />
+              <span class="font-mono font-medium">{{ emailDrawEmail }}</span>
+            </p>
+            <p class="text-xs text-slate-500">
+              请在邮箱中点击「点击抽奖」链接完成抽奖，结果将在此处自动显示
+            </p>
+            <div v-if="emailPolling" class="text-xs text-slate-400">
+              <span
+                class="inline-block animate-spin rounded-full h-3 w-3 border-b border-slate-400 align-[-1px]"
+              ></span>
+              正在等待邮件确认...
+            </div>
+          </div>
+          <button class="draw-button" @click="cancelEmailWait">取消等待</button>
+        </div>
+
+        <!-- 邮箱即抽：前缀输入（替代抽奖码输入） -->
+        <div v-else-if="emailDrawEnabled" class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+          <div class="flex items-center">
+            <Input
+              v-model="emailPrefix"
+              placeholder="输入邮箱前缀"
+              class="flex-1 text-lg font-mono"
+              @keyup.enter="handleRequestEmailDraw"
+            />
+            <span class="ml-1 shrink-0 text-lg text-gray-500 font-mono">{{ emailDrawSuffix }}</span>
+          </div>
+          <p class="mt-2 text-xs text-gray-400">
+            无需抽奖码：提交后系统向 {{ emailDrawSuffix }} 邮箱发送确认邮件，点击链接即抽
+          </p>
+        </div>
+
+        <!-- 抽奖码输入框（未开启邮箱即抽的常规入口） -->
+        <div v-else class="mb-6">
           <label class="block text-sm font-medium text-gray-700 mb-2">抽奖码</label>
           <Input
             v-model="lotteryCode"
@@ -55,8 +93,11 @@
           />
         </div>
 
-        <!-- 参与者信息（仅online模式） -->
-        <div v-if="activityInfo?.lottery_mode === 'online'" class="mb-6 space-y-4">
+        <!-- 参与者信息（仅online模式且未开启邮箱即抽） -->
+        <div
+          v-if="activityInfo?.lottery_mode === 'online' && !emailDrawEnabled"
+          class="mb-6 space-y-4"
+        >
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">姓名</label>
             <Input v-model="participantInfo.name" placeholder="请输入姓名" />
@@ -71,8 +112,17 @@
           </div>
         </div>
 
-        <!-- 立即抽奖按钮 -->
-        <button :disabled="!canDraw || isDrawing" class="draw-button" @click="handleDraw">
+        <!-- 立即抽奖按钮（邮箱即抽：提交前缀发确认邮件） -->
+        <button
+          v-if="emailDrawEnabled"
+          :disabled="!emailPrefix.trim() || isDrawing"
+          class="draw-button"
+          @click="handleRequestEmailDraw"
+        >
+          <Gift class="w-5 h-5" />
+          {{ isDrawing ? '发送中...' : '参与抽奖' }}
+        </button>
+        <button v-else :disabled="!canDraw || isDrawing" class="draw-button" @click="handleDraw()">
           <Gift class="w-5 h-5" />
           {{ isDrawing ? '抽奖中...' : '立即抽奖' }}
         </button>
@@ -186,8 +236,10 @@
 
         <DialogFooter class="pt-6">
           <div class="w-full flex justify-center gap-3">
-            <!-- 撤销本次操作：中奖在签字完成前可撤销（恢复库存/码/删记录） -->
+            <!-- 撤销本次操作：中奖在签字完成前可撤销（恢复库存/码/删记录）；
+                 轮询来源的结果本机无抽奖码，撤销仅在邮件链接打开的设备可用 -->
             <button
+              v-if="!resultFromPoll"
               class="px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 font-medium rounded-xl transition-all duration-200"
               @click="showUndoConfirm = true"
             >
@@ -266,7 +318,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Input } from '@/components/ui/input'
 import {
@@ -326,6 +378,22 @@ const showUndoConfirm = ref(false)
 const undoing = ref(false)
 /** 撤销凭证：本次使用的抽奖码（清空输入前留存） */
 const lastDrawnCode = ref('')
+
+// ---- 邮箱即抽 ----
+const emailDrawEnabled = computed(() => activityInfo.value?.settings?.email_draw?.enabled === true)
+const emailDrawSuffix = computed(
+  () => activityInfo.value?.settings?.email_draw?.domain_suffix || '',
+)
+const emailPrefix = ref('')
+const emailDrawWaiting = ref(false)
+const emailDrawEmail = ref('')
+const emailPolling = ref(false)
+let emailPollStopped = true
+/** 结果来自提交页长轮询（本机无抽奖码，撤销仅在邮件链接打开的设备上可用） */
+const resultFromPoll = ref(false)
+/** 邮件链接 ?edraw=code：预填并自动以公开 draw 执行（无视 offline 登录门槛） */
+const edrawCode = urlParams.get('edraw')
+if (edrawCode) lotteryCode.value = edrawCode
 
 // 参与者信息（仅online模式需要）
 const participantInfo = ref({
@@ -463,9 +531,10 @@ const loadActivityInfo = async () => {
   }
 }
 
-// 处理抽奖
-const handleDraw = async () => {
-  if (!canDraw.value || isDrawing.value) return
+// 处理抽奖（forceOnline：邮件链接自动抽奖路径，offline 活动亦走公开 draw）
+const handleDraw = async (opts?: { forceOnline?: boolean }) => {
+  const forceOnline = opts?.forceOnline === true
+  if ((!canDraw.value && !forceOnline) || isDrawing.value) return
 
   // 输入验证
   if (!lotteryCode.value.trim()) {
@@ -484,10 +553,12 @@ const handleDraw = async () => {
     }
   }
 
-  // 检查offline模式下的登录状态
-  const isAuthorized = await checkAuthForOffline()
-  if (!isAuthorized) {
-    return
+  // 检查offline模式下的登录状态（邮件链接路径跳过：凭码即可，无需管理员）
+  if (!forceOnline) {
+    const isAuthorized = await checkAuthForOffline()
+    if (!isAuthorized) {
+      return
+    }
   }
 
   try {
@@ -495,8 +566,8 @@ const handleDraw = async () => {
 
     let drawResponse
 
-    if (activityInfo.value?.lottery_mode === 'online') {
-      // 线上抽奖
+    if (activityInfo.value?.lottery_mode === 'online' || forceOnline) {
+      // 线上抽奖（含邮件链接自动抽奖）
       drawResponse = await lotteryApi.draw(activityId, {
         lottery_code: lotteryCode.value,
         participant_info: {
@@ -576,12 +647,13 @@ const closeResult = () => {
   showResult.value = false
   lotteryResult.value = null
   pendingSignature.value = false
+  resultFromPoll.value = false
 }
 
 // 结果弹窗的关闭请求拦截：ESC/遮罩等提前退出 ≠ 直接关闭，
 // 一律先经「确认撤销」弹窗（确认后走撤销接口复原库存/码/记录）
 const handleResultCloseRequest = (open: boolean) => {
-  if (!open && showResult.value) {
+  if (!open && showResult.value && !resultFromPoll.value) {
     showUndoConfirm.value = true
     return
   }
@@ -627,6 +699,72 @@ const handleUndoConfirm = async () => {
   }
 }
 
+// ---- 邮箱即抽：提交前缀 → 发确认邮件 → 长轮询等结果 ----
+const handleRequestEmailDraw = async () => {
+  const prefix = emailPrefix.value.trim().toLowerCase()
+  if (!prefix) return
+  if (!/^[a-z0-9._-]{1,64}$/.test(prefix)) {
+    toast.error('邮箱前缀仅支持字母、数字、点、下划线、连字符')
+    return
+  }
+
+  try {
+    isDrawing.value = true
+    const res = await lotteryApi.requestEmailDraw(activityId, prefix)
+    emailDrawEmail.value = res.email
+    emailDrawWaiting.value = true
+    toast.success(`确认邮件已发送至 ${res.email}`)
+    startEmailPolling(res.email)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : '发送确认邮件失败')
+  } finally {
+    isDrawing.value = false
+  }
+}
+
+const startEmailPolling = async (email: string) => {
+  emailPollStopped = false
+  emailPolling.value = true
+  try {
+    while (!emailPollStopped && emailDrawWaiting.value) {
+      // 服务端长轮询（最长挂 20s）；返回 drawn 即渲染结果
+      const status = await lotteryApi.emailDrawStatus(activityId, email, true)
+      if (emailPollStopped) return
+      if (status.state === 'drawn' && status.result) {
+        emailDrawWaiting.value = false
+        // 复用结果弹窗（本机无抽奖码：不显示撤销、关闭不需确认）
+        resultFromPoll.value = true
+        lotteryResult.value = {
+          is_winner: status.result.is_winner,
+          prize: (status.result.prize as unknown as Prize) ?? null,
+          lottery_code: null,
+          lottery_record: null,
+        }
+        pendingSignature.value = false
+        showResult.value = true
+        toast.success(
+          status.result.is_winner ? '🎉 邮箱确认完成，恭喜中奖！' : '邮箱确认完成，本次未中奖',
+        )
+        return
+      }
+    }
+  } catch {
+    // 轮询网络异常：回到输入态让用户重试
+    if (!emailPollStopped) {
+      emailDrawWaiting.value = false
+      toast.error('结果查询中断，请重新提交或检查邮箱链接')
+    }
+  } finally {
+    emailPolling.value = false
+  }
+}
+
+const cancelEmailWait = () => {
+  emailPollStopped = true
+  emailDrawWaiting.value = false
+  emailPolling.value = false
+}
+
 // 从结果弹窗进入签字（手动触发）
 const goSignature = () => {
   showResult.value = false
@@ -661,9 +799,17 @@ const handleSignatureConfirm = async (dataUrl: string) => {
   }
 }
 
-// 组件挂载时加载数据
-onMounted(() => {
-  loadActivityInfo()
+// 组件挂载时加载数据；邮件链接（?edraw=）在活动加载后自动执行抽奖
+onMounted(async () => {
+  await loadActivityInfo()
+  if (edrawCode && activityInfo.value) {
+    // 邮件链接路径：无视活动模式走公开 draw（offline 亦无需管理员登录）
+    await handleDraw({ forceOnline: true })
+  }
+})
+
+onUnmounted(() => {
+  emailPollStopped = true
 })
 </script>
 

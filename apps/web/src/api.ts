@@ -27,6 +27,7 @@ import type {
   DrawLotteryResponse,
   UndoDrawRequest,
   UndoDrawResponse,
+  EmailDrawStatus,
   RegistrationStatus,
   MailConfig,
   UploadSignatureRequest,
@@ -255,6 +256,30 @@ export const lotteryApi = {
         method: 'POST',
         body: JSON.stringify(data),
       },
+      false,
+    )
+  },
+
+  // 邮箱即抽：提交前缀 → 发确认邮件（点击链接才执行抽奖）
+  async requestEmailDraw(
+    id: number,
+    email_prefix: string,
+  ): Promise<{ sent: boolean; email: string }> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/request`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email_prefix }),
+      },
+      false,
+    )
+  },
+
+  // 邮箱即抽状态（wait=true 为长轮询，服务端最长挂 20s）
+  async emailDrawStatus(id: number, email: string, wait = false): Promise<EmailDrawStatus> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/status?email=${encodeURIComponent(email)}${wait ? '&wait=1' : ''}`,
+      {},
       false,
     )
   },

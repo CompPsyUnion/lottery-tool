@@ -7,10 +7,15 @@ import { AppDataSource } from '../utils/database'
 import { Activity } from '../entities/activity.entity'
 import { LotteryRecord } from '../entities/lottery-record.entity'
 import { Prize } from '../entities/prize.entity'
+import { LotteryCode } from '../entities/lottery-code.entity'
+import { generateLotteryCode } from '../utils/lottery-code-generator'
+import { renderEmailDrawMail } from '../utils/mail-theme'
 import * as ActivityService from '../services/activity.service'
 import * as LotteryCodeService from '../services/lottery-code.service'
 import * as PrizeService from '../services/prize.service'
 import * as LotteryRecordService from '../services/lottery-record.service'
+import * as MailService from '../services/mail.service'
+import { checkEmailDrawSendLimit } from '../services/email-code.service'
 import { OPERATION_TYPES, log as writeOperationLog } from '../services/operation-log.service'
 
 const router = express.Router()
@@ -97,6 +102,12 @@ router.get('/activities/:id', async (req: Request, res: Response, next: NextFunc
             require_signature: activity.settings?.require_signature === true,
             // 抽奖页据此设置输入框 maxlength/输入过滤（此前不透出导致 12 位格式码被截断）
             lottery_code_format: activity.settings?.lottery_code_format || '8_digit_number',
+            // 邮箱即抽：开启时抽奖页切换为邮箱前缀输入（后缀展示 + 次数限制）
+            email_draw: {
+              enabled: getEmailDrawSettings(activity).enabled === true,
+              domain_suffix: getEmailDrawSettings(activity).domain_suffix || '',
+              max_per_email: getEmailDrawSettings(activity).max_per_email || 1,
+            },
           },
         },
         prizes: prizes.map((prize) => ({
@@ -379,6 +390,230 @@ router.post(
     }
   },
 )
+
+// ==================== 邮箱即抽（无预输入抽奖码） ====================
+
+// 前缀合法字符（本地部分子集）：字母/数字/点/下划线/连字符
+const EMAIL_PREFIX_RE = /^[A-Za-z0-9._-]{1,64}$/
+
+interface EmailDrawSettings {
+  enabled?: boolean
+  domain_suffix?: string
+  max_per_email?: number
+}
+
+const getEmailDrawSettings = (activity: Activity): EmailDrawSettings => {
+  const raw = (activity.settings as Record<string, unknown> | null)?.email_draw
+  return raw && typeof raw === 'object' ? (raw as EmailDrawSettings) : {}
+}
+
+/** 该邮箱在活动下的全部业务码（participant_info.email 精确匹配） */
+const findEmailCodes = (activityId: number, email: string): Promise<LotteryCode[]> =>
+  AppDataSource.getRepository(LotteryCode)
+    .createQueryBuilder('code')
+    .where('code.activity_id = :activityId', { activityId })
+    .andWhere('code.is_test = false')
+    .andWhere(`code.participant_info->>'email' = :email`, { email })
+    .orderBy('code.created_at', 'ASC')
+    .getMany()
+
+/**
+ * @route   POST /api/lottery/activities/:id/email-draw/request
+ * @desc    邮箱即抽：提交邮箱前缀 → 生成（或复用待用）抽奖码并发确认邮件；
+ *          参与者点击邮件链接（?edraw=code）后才真正执行抽奖
+ * @access  Public（/lottery 全局限流 + 每邮箱 1/min、10/day 发送频控）
+ */
+router.post(
+  '/activities/:id/email-draw/request',
+  [body('email_prefix').notEmpty().withMessage('邮箱前缀不能为空')],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const prefix = String(req.body.email_prefix || '')
+        .trim()
+        .toLowerCase()
+
+      const activity = await ActivityService.findById(activityId)
+      if (!activity) throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
+
+      const emailDraw = getEmailDrawSettings(activity)
+      if (emailDraw.enabled !== true) {
+        throw createError('VALIDATION_INVALID_FORMAT', '该活动未开启邮箱即抽')
+      }
+      const suffix = emailDraw.domain_suffix || ''
+      if (!suffix.startsWith('@')) {
+        throw createError('SYSTEM_MAIL_NOT_CONFIGURED', '活动邮箱后缀未配置')
+      }
+      if (!EMAIL_PREFIX_RE.test(prefix)) {
+        throw createError(
+          'VALIDATION_INVALID_FORMAT',
+          '邮箱前缀仅支持字母、数字、点、下划线、连字符',
+        )
+      }
+      const email = `${prefix}${suffix.toLowerCase()}`
+
+      // 活动须在进行中（与真实码抽奖一致）
+      const openState = ActivityService.getActivityOpenState(activity)
+      if (!openState.open) {
+        throw createError('BUSINESS_ACTIVITY_NOT_STARTED', openState.message || '活动不可参与')
+      }
+
+      // 参与上限优先于频控：已达上限的邮箱应听到「达上限」而非「太频繁」
+      const maxPerEmail = emailDraw.max_per_email || 1
+      const codes = await findEmailCodes(activityId, email)
+      const usedCount = codes.filter((c) => c.status === 'used').length
+      if (usedCount >= maxPerEmail) {
+        throw createError('VALIDATION_OUT_OF_RANGE', `该邮箱参与次数已达上限（${maxPerEmail} 次）`)
+      }
+
+      // 每邮箱发送频控（幂等重发同样计入，防邮件轰炸）
+      const limit = await checkEmailDrawSendLimit(email)
+      if (!limit.allowed) {
+        throw createError('AUTH_TOO_MANY_REQUESTS', limit.message || '发送过于频繁')
+      }
+
+      let lotteryCode = codes.find((c) => c.status === 'unused')
+
+      if (!lotteryCode) {
+        // 生成新码（占用活动码配额；撞码重试）
+        const settings = (activity.settings as Record<string, unknown>) || {}
+        const format = (settings.lottery_code_format as string) || '8_digit_number'
+        const maxLotteryCodes = (settings.max_lottery_codes as number) || 1000
+        const existingCount = await LotteryCodeService.countByActivity(activityId)
+        if (existingCount + 1 > maxLotteryCodes) {
+          throw createError(
+            'VALIDATION_OUT_OF_RANGE',
+            `参与人数将达到活动最大抽奖码限制 ${maxLotteryCodes}`,
+          )
+        }
+        const existingCodes = await LotteryCodeService.getAllCodesForActivity(activityId)
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candidate = generateLotteryCode(format)
+          if (!existingCodes.includes(candidate)) {
+            lotteryCode = await AppDataSource.getRepository(LotteryCode).save({
+              activity_id: activityId,
+              code: candidate,
+              participant_info: { email },
+              status: 'unused',
+            })
+            break
+          }
+        }
+        if (!lotteryCode) {
+          throw createError('SYSTEM_INTERNAL_ERROR', '生成抽奖码失败，请重试')
+        }
+      }
+
+      // 确认邮件（点击链接 → /lottery?activityId=&edraw=code → 前端用公开 draw 端点执行抽奖）
+      const mailConfig = await MailService.getMailConfig()
+      if (!mailConfig?.postUrl) {
+        throw createError('SYSTEM_MAIL_NOT_CONFIGURED', '邮件通道未配置，请联系管理员')
+      }
+      // 前端地址取提交页来源（Origin/Referer 即抽奖页），兜底请求主机
+      const frontendBase =
+        req.get('origin') ||
+        (req.get('referer') ? new URL(req.get('referer')!).origin : undefined) ||
+        `${req.protocol}://${req.get('host')}`
+      const link = `${frontendBase}/lottery?activityId=${activityId}&edraw=${lotteryCode.code}`
+
+      await MailService.sendMail(mailConfig, {
+        to: email,
+        subject: `抽奖参与确认：「${activity.name}」`,
+        body: await renderEmailDrawMail(activity.name, link),
+        html: true,
+      })
+
+      await writeOperationLog({
+        user_id: null,
+        operation_type: OPERATION_TYPES.EMAIL_DRAW_REQUEST,
+        operation_detail: `邮箱即抽请求: ${email}（码 ${lotteryCode.code}）`,
+        target_type: 'ACTIVITY',
+        target_id: activityId,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
+
+      res.status(200).json({
+        success: true,
+        data: { sent: true, email },
+        message: `确认邮件已发送至 ${email}，请在邮箱中点击链接完成抽奖`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   GET /api/lottery/activities/:id/email-draw/status
+ * @desc    邮箱即抽状态（供提交页长轮询）：none / pending / drawn（drawn 附结果摘要；
+ *          不含抽奖码——邮箱可被他人枚举，码仅随邮件发给本人，点击设备方可撤销）
+ * @access  Public（wait=1 时最长挂 20s，每秒查库，状态变化即返）
+ */
+router.get('/activities/:id/email-draw/status', async (req, res, next) => {
+  try {
+    const activityId = parseInt(req.params.id)
+    const email = String(req.query.email || '')
+      .trim()
+      .toLowerCase()
+    const wait = req.query.wait === '1'
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      throw createError('VALIDATION_INVALID_FORMAT', '邮箱格式不正确')
+    }
+
+    // 长轮询：pending 时最多挂 20 秒等待点击设备完成抽奖
+    const deadline = Date.now() + 20_000
+    while (true) {
+      const codes = await findEmailCodes(activityId, email)
+      const drawnCode = codes.find((c) => c.status === 'used')
+      if (drawnCode) {
+        const record = await AppDataSource.getRepository(LotteryRecord).findOne({
+          where: { lottery_code_id: drawnCode.id, is_test: false },
+          relations: { prize: true },
+          order: { created_at: 'DESC' },
+        })
+        return res.json({
+          success: true,
+          data: {
+            state: 'drawn',
+            result: record
+              ? {
+                  is_winner: record.is_winner,
+                  prize: record.prize
+                    ? { name: record.prize.name, description: record.prize.description }
+                    : null,
+                  created_at: record.created_at,
+                }
+              : { is_winner: false, prize: null, created_at: null },
+          },
+        })
+      }
+
+      // 长轮询：wait=1 且存在待用请求（pending）时挂起等点击设备完成抽奖；
+      // none（无请求，如邮箱拼错）与超时立即返回当前状态
+      const hasPending = codes.some((c) => c.status === 'unused')
+      if (!wait || !hasPending || Date.now() >= deadline) {
+        return res.json({
+          success: true,
+          data: { state: codes.length > 0 ? 'pending' : 'none' },
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  } catch (error) {
+    next(error)
+  }
+})
 
 /**
  * @route   POST /api/lottery/activities/:id/offline-draw

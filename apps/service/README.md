@@ -164,6 +164,21 @@ curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
+## Email Draw (邮箱即抽)
+
+Optional per-activity feature (`settings.email_draw = { enabled, domain_suffix, max_per_email }`).
+Participants enter an email prefix on the lottery page; the backend mails a confirmation link —
+clicking the link performs the actual draw via the public draw endpoint (works for offline
+activities too; the link token is the proof of mailbox ownership). The submitting page long-polls
+the status endpoint to display the result.
+
+```text
+POST /lottery/activities/:id/email-draw/request   { email_prefix }  → sends confirmation email
+GET  /lottery/activities/:id/email-draw/status?email=&wait=1        → none | pending | drawn(+result)
+```
+
+Per-email send limits: 1/min and 10/day; participation capped by `max_per_email` (default 1).
+
 ## Webhook Integration
 
 ### Get Webhook Information

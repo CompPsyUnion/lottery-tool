@@ -102,3 +102,26 @@ export async function renderKdocsNotifyMail(
     siteTheme(),
   )
 }
+
+/** 邮箱即抽参与确认（点击链接执行抽奖；不含结果） */
+export async function renderEmailDrawMail(activityName: string, link: string): Promise<string> {
+  const { renderCardEmail } = await templateModule
+  const escapeHtml = (text: string): string =>
+    text.replace(
+      /[&<>"']/g,
+      (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
+    )
+  return renderCardEmail(
+    {
+      title: '抽奖参与确认',
+      bodyHtml:
+        '<p>您好：</p>' +
+        `<p>您正在参与「${escapeHtml(activityName)}」的抽奖，请点击下方链接完成抽奖并查看结果：</p>` +
+        `<p style="margin:24px 0"><a href="${escapeHtml(link)}" style="display:inline-block;padding:12px 28px;background-color:${PRIMARY_COLOR};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600">点击抽奖</a></p>` +
+        `<p style="word-break:break-all"><a href="${escapeHtml(link)}" style="color:${PRIMARY_COLOR}">${escapeHtml(link)}</a></p>` +
+        '<p>如果按钮无法点击，请复制上方链接到浏览器打开。若非本人操作，请忽略本邮件。</p>',
+      preheader: '点击链接完成抽奖并查看结果',
+    },
+    siteTheme(),
+  )
+}

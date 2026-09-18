@@ -304,6 +304,72 @@
         </FormField>
       </div>
 
+      <!-- 邮箱即抽（可选：前台输邮箱前缀 → 确认邮件链接执行抽奖） -->
+      <div class="space-y-4 pt-4 border-t">
+        <h3 class="text-lg font-medium text-gray-900">邮箱即抽（可选）</h3>
+        <p class="text-xs text-muted-foreground -mt-2">
+          开启后抽奖页不再要求抽奖码：参与者输入邮箱前缀，系统发送确认邮件，
+          点击邮件链接后执行抽奖并展示结果（原页面同步显示）。需配置邮件通道。
+        </p>
+
+        <FormField v-slot="{ field: componentField }" name="settings.email_draw.enabled">
+          <FormItem class="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div class="space-y-0.5">
+              <FormLabel class="text-base">开启邮箱即抽</FormLabel>
+              <FormDescription> 参与者无需预输入抽奖码，凭邮箱确认链接即可参与。 </FormDescription>
+            </div>
+            <FormControl>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="(componentField as any).value"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                  (componentField as any).value ? 'bg-blue-600' : 'bg-gray-200',
+                ]"
+                @click="
+                  form.setFieldValue('settings.email_draw.enabled', !(componentField as any).value)
+                "
+              >
+                <span
+                  :class="[
+                    'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    (componentField as any).value ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </FormControl>
+          </FormItem>
+        </FormField>
+
+        <div
+          v-if="form.values.settings?.email_draw?.enabled"
+          class="grid grid-cols-1 md:grid-cols-2 gap-4"
+        >
+          <FormField v-slot="{ field: componentField }" name="settings.email_draw.domain_suffix">
+            <FormItem>
+              <FormLabel>邮箱后缀 *</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="@unnc.edu.cn" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 前台仅输入 @ 前的部分，完整邮箱 = 前缀 + 此后缀 </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
+          <FormField v-slot="{ field: componentField }" name="settings.email_draw.max_per_email">
+            <FormItem>
+              <FormLabel>每邮箱参与次数</FormLabel>
+              <FormControl>
+                <Input type="number" min="1" max="10" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 同一邮箱在本活动可发起的参与次数（1-10） </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+        </div>
+      </div>
+
       <!-- 提交按钮 -->
       <div
         :class="[
@@ -398,6 +464,16 @@ const formSchema = toTypedSchema(
             .optional(),
           kdocs_bind_code: z.string().max(50, '绑定码不能超过50个字符').optional(),
           kdocs_notify: z.boolean().optional(),
+          email_draw: z
+            .object({
+              enabled: z.boolean().optional(),
+              domain_suffix: z
+                .string()
+                .regex(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, '邮箱后缀格式不正确（如 @unnc.edu.cn）')
+                .optional(),
+              max_per_email: z.coerce.number().min(1, '至少 1 次').max(10, '最多 10 次').optional(),
+            })
+            .optional(),
         })
         .optional(),
     })
@@ -431,6 +507,7 @@ const form = useForm({
       kdocs_field_map: { name: '', student_id: '', email: '', phone: '' },
       kdocs_bind_code: '',
       kdocs_notify: true,
+      email_draw: { enabled: false, domain_suffix: '', max_per_email: 1 },
     },
   },
 })
@@ -484,6 +561,11 @@ const loadActivity = async () => {
         },
         kdocs_bind_code: activity.settings?.kdocs_bind_code || '',
         kdocs_notify: activity.settings?.kdocs_notify !== false,
+        email_draw: {
+          enabled: activity.settings?.email_draw?.enabled === true,
+          domain_suffix: activity.settings?.email_draw?.domain_suffix || '',
+          max_per_email: activity.settings?.email_draw?.max_per_email || 1,
+        },
       },
     })
     selectedStatus.value = activity.status
@@ -544,6 +626,11 @@ const onSubmit = form.handleSubmit(async (values) => {
         },
         kdocs_bind_code: values.settings?.kdocs_bind_code ?? '',
         kdocs_notify: values.settings?.kdocs_notify !== false,
+        email_draw: {
+          enabled: values.settings?.email_draw?.enabled === true,
+          domain_suffix: values.settings?.email_draw?.domain_suffix?.trim() || undefined,
+          max_per_email: values.settings?.email_draw?.max_per_email || 1,
+        },
       },
     }
 

@@ -98,7 +98,45 @@ const activitySettingsValidators = [
     .withMessage('绑定码不能超过50个字符'),
 
   body('settings.kdocs_notify').optional().isBoolean().withMessage('通知开关必须是布尔值'),
+
+  // 邮箱即抽：开关 / 邮箱后缀 / 每邮箱参与上限
+  body('settings.email_draw.enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('邮箱即抽开关必须是布尔值'),
+
+  body('settings.email_draw.domain_suffix')
+    .optional()
+    .matches(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/)
+    .withMessage('邮箱后缀格式不正确（如 @unnc.edu.cn）'),
+
+  body('settings.email_draw.max_per_email')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('每邮箱参与次数必须是1-10的整数'),
 ]
+
+/** 邮箱即抽配置归一化：后缀统一带 @ 前缀；返回 undefined 表示请求未涉及该键 */
+const normalizeEmailDrawPatch = (
+  settings: Record<string, unknown>,
+): { enabled?: boolean; domain_suffix?: string; max_per_email?: number } | undefined => {
+  if (settings.email_draw === undefined) return undefined
+  const raw =
+    settings.email_draw && typeof settings.email_draw === 'object'
+      ? (settings.email_draw as Record<string, unknown>)
+      : {}
+  const patch: { enabled?: boolean; domain_suffix?: string; max_per_email?: number } = {}
+  if (raw.enabled !== undefined) patch.enabled = raw.enabled === true
+  if (typeof raw.domain_suffix === 'string' && raw.domain_suffix !== '') {
+    patch.domain_suffix = raw.domain_suffix.startsWith('@')
+      ? raw.domain_suffix
+      : `@${raw.domain_suffix}`
+  }
+  if (raw.max_per_email !== undefined) {
+    patch.max_per_email = Number.parseInt(String(raw.max_per_email), 10) || 1
+  }
+  return patch
+}
 
 /**
  * @route   GET /api/admin/activities
@@ -233,6 +271,17 @@ router.post(
         if (settings.kdocs_notify !== undefined) {
           activityData.settings.kdocs_notify = settings.kdocs_notify === true
         }
+        // 邮箱即抽（可选）；新建场景开启必须同时带后缀
+        const emailDraw = normalizeEmailDrawPatch(settings)
+        if (emailDraw) {
+          if (emailDraw.enabled === true && !emailDraw.domain_suffix) {
+            throw createError('VALIDATION_INVALID_FORMAT', '开启邮箱即抽需配置邮箱后缀')
+          }
+          activityData.settings.email_draw = {
+            ...((activityData.settings.email_draw as Record<string, unknown>) || {}),
+            ...emailDraw,
+          }
+        }
       }
 
       const activity = await ActivityService.createActivity(activityData)
@@ -330,6 +379,18 @@ router.put(
         }
         if (settings.kdocs_notify !== undefined) {
           merged.kdocs_notify = settings.kdocs_notify === true
+        }
+        // 邮箱即抽（可选）：键级合并（未出现的子键保留旧值）；开启态最终必须带后缀
+        const emailDraw = normalizeEmailDrawPatch(settings)
+        if (emailDraw) {
+          const mergedDraw = {
+            ...((merged.email_draw as Record<string, unknown>) || {}),
+            ...emailDraw,
+          }
+          if (mergedDraw.enabled === true && !mergedDraw.domain_suffix) {
+            throw createError('VALIDATION_INVALID_FORMAT', '开启邮箱即抽需配置邮箱后缀')
+          }
+          merged.email_draw = mergedDraw
         }
         updateData.settings = merged as Activity['settings']
       }
