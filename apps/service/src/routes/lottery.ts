@@ -988,10 +988,8 @@ router.post(
       // 不再作为能否签字的判据——补签入口对全部未签记录开放
       // （原「仅线下抽奖记录支持签字」把邮箱即抽的线上中奖记录也拦在了补签之外）
 
-      // 校验已经签过字
-      if (record.signature_status === 'signed') {
-        throw createError('BUSINESS_SIGNATURE_EXISTS', '该记录已签字，不可重复签字')
-      }
+      // 已签也可重签（覆盖旧签名）——管理端记录页对已签记录提供「重签」入口；
+      // 撤销抽奖仍对已签记录禁止（签字是最终确认）
 
       // 规范为完整 data URL（前端可能传裸 base64 或 data URL）
       const dataUrl = image.startsWith('data:')

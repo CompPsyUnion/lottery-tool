@@ -385,36 +385,38 @@ const columns: TableColumn[] = [
     render: (_value: unknown, row: unknown) => {
       const record = row as LotteryRecord
       const isSigned = record.signature_status === 'signed'
+      const btnCls = 'inline-flex items-center gap-1 text-sm font-medium transition-colors'
       if (isSigned) {
-        return h(
-          'button',
-          {
-            class:
-              'inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium',
-            onClick: () => openSignaturePreview(record),
-          },
-          [h(Eye, { class: 'w-4 h-4' }), '已签'],
-        )
+        // 已签：预览旧签名 + 重签（覆盖）
+        return h('div', { class: 'flex items-center justify-center gap-2' }, [
+          h(
+            'button',
+            {
+              class: `${btnCls} text-blue-600 hover:text-blue-800`,
+              title: '预览签名',
+              onClick: () => openSignaturePreview(record),
+            },
+            [h(Eye, { class: 'w-4 h-4' }), '已签'],
+          ),
+          h(
+            'button',
+            {
+              class: `${btnCls} text-amber-600 hover:text-amber-800`,
+              title: '重新签字（覆盖现有签名）',
+              onClick: () => openResign(record),
+            },
+            [h(PenLine, { class: 'w-4 h-4' }), '重签'],
+          ),
+        ])
       }
-      // 未签：提供补签入口（线下/线上记录均可——邮箱即抽的中奖记录同样可补签）
-      {
-        return h(
-          'button',
-          {
-            class:
-              'inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium',
-            onClick: () => openResign(record),
-          },
-          [h(PenLine, { class: 'w-4 h-4' }), '补签'],
-        )
-      }
+      // 未签：补签（线下/线上记录均可——邮箱即抽的中奖记录同样可补签）
       return h(
-        'span',
+        'button',
         {
-          class:
-            'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500',
+          class: `${btnCls} text-blue-600 hover:text-blue-800`,
+          onClick: () => openResign(record),
         },
-        '未签',
+        [h(PenLine, { class: 'w-4 h-4' }), '补签'],
       )
     },
   },
@@ -599,14 +601,17 @@ const openSignaturePreview = async (record: LotteryRecord) => {
   }
 }
 
-// ---- 补签（未签字的线下记录） ----
+// ---- 补签/重签（未签=补签；已签=重签覆盖旧签名） ----
 const showResignDialog = ref(false)
 const isSubmittingResign = ref(false)
 const resignError = ref('')
 const resignRecordId = ref<number | null>(null)
+/** 重签模式（已签记录覆盖）——影响成功文案 */
+const isResignOverwrite = ref(false)
 
 const openResign = (record: LotteryRecord) => {
   resignRecordId.value = record.id
+  isResignOverwrite.value = record.signature_status === 'signed'
   resignError.value = ''
   showResignDialog.value = true
 }
@@ -619,7 +624,7 @@ const handleResignConfirm = async (dataUrl: string) => {
     await API.adminActivity.uploadSignature(activityId, resignRecordId.value, {
       image: dataUrl,
     })
-    toast.success('补签成功')
+    toast.success(isResignOverwrite.value ? '重签成功（原签名已覆盖）' : '补签成功')
     showResignDialog.value = false
     resignRecordId.value = null
     await fetchLotteryRecords()
