@@ -340,6 +340,15 @@ const columns: TableColumn[] = [
     render: (value: unknown) => (value as string) || '-',
   },
   {
+    key: 'email',
+    title: '邮箱',
+    width: '180px',
+    render: (value: unknown) =>
+      value
+        ? `<span class="text-xs break-all">${value}</span>`
+        : '<span class="text-muted-foreground">-</span>',
+  },
+  {
     key: 'is_winner',
     title: '中奖状态',
     width: '100px',
