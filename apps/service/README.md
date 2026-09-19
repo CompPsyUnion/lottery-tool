@@ -164,6 +164,40 @@ curl -X POST http://localhost:3000/admin/activities/1/lottery-codes/demo \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
+## Email Draw (邮箱即抽)
+
+Optional per-activity feature
+(`settings.email_draw = { enabled, domain_suffix, max_per_email, show_result_on_click }`;
+`show_result_on_click` defaults to `false` — the clicking device only confirms participation
+and is told to check the result on the submitting page / big screen; set `true` to also show
+the result on the clicking device).
+Participants enter an email prefix on the lottery page; the backend mails a confirmation link —
+clicking the link performs the actual draw via the public draw endpoint (works for offline
+activities too; the link token is the proof of mailbox ownership). The submitting page long-polls
+the status endpoint to display the result.
+
+```text
+POST /lottery/activities/:id/email-draw/request   { email_prefix }  → sends confirmation email
+GET  /lottery/activities/:id/email-draw/status?email=&wait=1        → none | pending | drawn(+result)
+```
+
+Per-email send limits: 1/min and 10/day; participation capped by `max_per_email` (default 1).
+
+## Audit Log
+
+Structured audit trail (`audit_logs` table) recording every prize-stock / lottery-code count
+change with before/after values, delta, and the actor (admin username or participant email):
+`DRAW_ONLINE / DRAW_OFFLINE / DRAW_TEST / UNDO_DRAW / RECORD_DELETE / PRIZE_CREATE /
+PRIZE_UPDATE / PRIZE_DELETE / CODE_CREATE / CODE_IMPORT / CODE_REPLACE / CODE_DELETE`.
+Draw and undo entries are written in the same transaction as the stock change.
+
+```bash
+curl -X GET "http://localhost:3000/admin/audit?activity_id=1&action=DRAW_ONLINE&page=1&limit=20" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Regular admins see only their own activities; the super admin sees all.
+
 ## Webhook Integration
 
 ### Get Webhook Information

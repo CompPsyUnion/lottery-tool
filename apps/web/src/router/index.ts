@@ -30,6 +30,16 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    // 邮箱即抽确认链接专用子页：点击邮件「点击抽奖」后落地，
+    // 自动执行抽奖并只展示结果——不占用 /lottery 主路由（提交页仍在那边长轮询）
+    path: '/edraw/:activityId',
+    name: 'EmailDrawConfirm',
+    component: () => import('../views/emailDrawConfirm.vue'),
+    meta: {
+      title: '抽奖确认',
+    },
+  },
+  {
     path: '/login',
     name: 'Login',
     component: () => import('../views/auth/login.vue'),

@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express'
+import { randomInt } from 'crypto'
 import { body, validationResult } from 'express-validator'
 
 import { generateToken, authenticateToken, optionalAuth } from '../middleware/auth'
@@ -143,7 +144,8 @@ router.post(
         throw createError('AUTH_TOO_MANY_REQUESTS', limit.message)
       }
 
-      const code = String(Math.floor(100000 + Math.random() * 900000))
+      // CSPRNG 生成 6 位验证码（Math.random 可预测）；randomInt 上界开区间
+      const code = String(randomInt(100000, 1000000))
       issueCode(normalized, session, code, mailConfig.codeTtlMinutes)
 
       // email-poster 内置 code 模板（贴合站点主题，明暗自适应）

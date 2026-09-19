@@ -19,7 +19,27 @@ export interface KdocsFieldMap {
   phone?: string
 }
 
-/** 活动设置（settings jsonb） */
+/** 邮箱即抽设置：开启后抽奖页改为邮箱前缀输入，确认邮件链接执行抽奖 */
+export interface EmailDrawSettings {
+  enabled?: boolean
+  /** 统一带 @ 前缀（如 @unnc.edu.cn） */
+  domain_suffix?: string
+  /** 同一邮箱在本活动的参与次数上限（默认 1） */
+  max_per_email?: number
+  /** 点击链接设备是否直接显示结果（默认 false=仅确认，回原提交页查看） */
+  show_result_on_click?: boolean
+}
+
+/** 邮箱即抽状态（提交页长轮询；drawn 附结果摘要，不含抽奖码） */
+export interface EmailDrawStatus {
+  state: 'none' | 'pending' | 'drawn'
+  result?: {
+    is_winner: boolean
+    prize: { name: string; description?: string | null } | null
+    created_at?: string | null
+  }
+}
+
 export interface ActivitySettings {
   max_lottery_codes?: number
   lottery_code_format?:
@@ -35,6 +55,7 @@ export interface ActivitySettings {
   kdocs_field_map?: KdocsFieldMap
   kdocs_bind_code?: string
   kdocs_notify?: boolean
+  email_draw?: EmailDrawSettings
 }
 
 /** 活动 Webhook 接入信息（GET /admin/activities/:id/webhook-info） */
@@ -81,7 +102,7 @@ export interface Prize {
 export interface LotteryCode {
   id: number
   code: string
-  status: 'unused' | 'used'
+  status: 'unused' | 'used' | 'invalid'
   /** 测试抽奖码（一活动至多一个，抽奖不产生副作用） */
   is_test?: boolean
   participant_info?: {
@@ -91,6 +112,8 @@ export interface LotteryCode {
   }
   used_at?: string
   created_at: string
+  /** 关联抽奖记录数（管理列表附带；删除该码会级联删除这些记录） */
+  record_count?: number
 }
 
 export interface LotteryRecord {
@@ -119,6 +142,16 @@ export interface Pagination {
   limit: number
   total: number
   totalPages: number
+}
+
+/** 公开可参与活动摘要（GET /lottery/activities：进行中，线上/线下均列出，仅公开字段） */
+export interface OpenActivitySummary {
+  id: number
+  name: string
+  description?: string | null
+  lottery_mode?: 'offline' | 'online'
+  start_time?: string | null
+  end_time?: string | null
 }
 
 export interface ApiResponse<T = unknown> {
@@ -238,8 +271,8 @@ export interface UpdatePrizeRequest {
 export interface AddLotteryCodeRequest {
   code?: string
   participant_info?: {
-    name: string
-    phone: string
+    name?: string
+    phone?: string
     email?: string
   }
 }
@@ -274,8 +307,99 @@ export interface ActivityListParams extends SearchParams {
 }
 
 export interface LotteryCodeListParams extends SearchParams {
-  status?: 'unused' | 'used'
+  status?: 'unused' | 'used' | 'invalid'
   has_participant_info?: boolean
+}
+
+// ==================== 审计日志 ====================
+
+/** 审计动作（与后端 AUDIT_ACTIONS 对齐） */
+export type AuditAction =
+  | 'DRAW_ONLINE'
+  | 'DRAW_OFFLINE'
+  | 'DRAW_TEST'
+  | 'UNDO_DRAW'
+  | 'RECORD_DELETE'
+  | 'PRIZE_CREATE'
+  | 'PRIZE_UPDATE'
+  | 'PRIZE_DELETE'
+  | 'CODE_CREATE'
+  | 'CODE_IMPORT'
+  | 'CODE_REPLACE'
+  | 'CODE_DELETE'
+
+export interface AuditLog {
+  id: number
+  activity_id: number
+  action: AuditAction
+  lottery_code?: string | null
+  prize_name?: string | null
+  quantity_before?: number | null
+  quantity_after?: number | null
+  delta: number
+  actor_type: 'admin' | 'participant' | 'email' | 'system'
+  actor?: string | null
+  user_id?: number | null
+  is_test: boolean
+  ip_address?: string | null
+  detail?: string | null
+  created_at: string
+}
+
+export interface AuditListParams {
+  page?: number
+  limit?: number
+  activity_id?: number
+  action?: AuditAction
+  code?: string
+}
+
+// ==================== 抽奖码批量管理 ====================
+
+export interface ImportLotteryCodeRow {
+  code: string
+  name?: string
+  phone?: string
+  email?: string
+}
+
+export interface ImportLotteryCodesRequest {
+  codes: ImportLotteryCodeRow[]
+  /** upsert：同码更新信息/新码创建；replace：先删全部 unused+invalid 业务码再 upsert */
+  mode: 'upsert' | 'replace'
+}
+
+export interface ImportLotteryCodesResponse {
+  mode: 'upsert' | 'replace'
+  created_count: number
+  updated_count: number
+  deleted_count: number
+  /** 覆盖/删除级联清除的抽奖记录数 */
+  records_deleted: number
+  failed_rows: Array<{ row: number; code?: string; reason: string }>
+}
+
+export interface BatchDeleteLotteryCodesRequest {
+  ids: number[]
+}
+
+export interface BatchDeleteLotteryCodesResponse {
+  results: Array<{ id: number; success: boolean; message: string }>
+  summary: {
+    total: number
+    deleted: number
+    failed: number
+    used_deleted: number
+    records_deleted: number
+  }
+}
+
+export interface UpdateParticipantInfoRequest {
+  participant_info: {
+    name?: string
+    phone?: string
+    email?: string
+  }
 }
 
 export interface LotteryRecordListParams extends PaginationParams {
@@ -294,6 +418,17 @@ export interface DrawLotteryResponse {
   /** demo 抽奖不产生记录，为 null */
   lottery_record: LotteryRecord | null
   lottery_code: LotteryCode
+}
+
+/** 撤销本次抽奖（签字完成前）：中奖恢复库存、码置回未使用、删除本次记录 */
+export interface UndoDrawRequest {
+  record_id: number
+  lottery_code: string
+}
+
+export interface UndoDrawResponse {
+  restored: boolean
+  is_test: boolean
 }
 
 // 签字上传（PNG data URL）

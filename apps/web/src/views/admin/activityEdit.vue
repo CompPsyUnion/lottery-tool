@@ -1,8 +1,8 @@
 <template>
-  <div class="space-y-6" :class="{ 'pb-20': !isAtBottom }">
+  <div class="space-y-6">
     <PageTitle title="Create Activity" />
 
-    <form class="space-y-6" @submit="onSubmit">
+    <form class="space-y-6" @submit.prevent>
       <!-- 基本信息 -->
       <div class="space-y-4">
         <h3 class="text-lg font-medium text-gray-900">基本信息</h3>
@@ -33,7 +33,9 @@
           </FormItem>
         </FormField>
 
-        <FormField v-slot="{ field: componentField }" name="lottery_mode">
+        <!-- RadioGroup 须用 slot 的 componentField（含 modelValue 的组件包）；
+             原生 field 包无 modelValue，RadioGroup 会退化为非受控、setValues 回显失效 -->
+        <FormField v-slot="{ componentField }" name="lottery_mode">
           <FormItem>
             <FormLabel>抽奖模式 *</FormLabel>
             <FormControl>
@@ -127,7 +129,7 @@
           </FormItem>
         </FormField>
 
-        <FormField v-slot="{ field: componentField }" name="settings.lottery_code_format">
+        <FormField v-slot="{ componentField }" name="settings.lottery_code_format">
           <FormItem>
             <FormLabel>抽奖码格式</FormLabel>
             <FormControl>
@@ -302,21 +304,114 @@
         </FormField>
       </div>
 
-      <!-- 提交按钮 -->
-      <div
-        :class="[
-          'flex space-x-4 transition-all duration-300',
-          isAtBottom
-            ? 'justify-start py-3 border-t static'
-            : 'justify-start fixed bottom-0 z-10 -mx-4 px-4 py-3 w-full bg-white/80 backdrop-blur-lg border-t',
-        ]"
-      >
-        <Button type="button" variant="outline" @click="$router.go(-1)"> 取消 </Button>
-        <Button type="submit" :disabled="isSubmitting">
-          {{ isSubmitting ? '保存中...' : isEditMode ? '更新活动' : '创建活动' }}
-        </Button>
+      <!-- 邮箱即抽（可选：前台输邮箱前缀 → 确认邮件链接执行抽奖） -->
+      <div class="space-y-4 pt-4 border-t">
+        <h3 class="text-lg font-medium text-gray-900">邮箱即抽（可选）</h3>
+        <p class="text-xs text-muted-foreground -mt-2">
+          开启后抽奖页不再要求抽奖码：参与者输入邮箱前缀，系统发送确认邮件，
+          点击邮件链接后执行抽奖并展示结果（原页面同步显示）。需配置邮件通道。
+        </p>
+
+        <FormField v-slot="{ field: componentField }" name="settings.email_draw.enabled">
+          <FormItem class="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div class="space-y-0.5">
+              <FormLabel class="text-base">开启邮箱即抽</FormLabel>
+              <FormDescription> 参与者无需预输入抽奖码，凭邮箱确认链接即可参与。 </FormDescription>
+            </div>
+            <FormControl>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="(componentField as any).value"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                  (componentField as any).value ? 'bg-blue-600' : 'bg-gray-200',
+                ]"
+                @click="
+                  form.setFieldValue('settings.email_draw.enabled', !(componentField as any).value)
+                "
+              >
+                <span
+                  :class="[
+                    'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    (componentField as any).value ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </FormControl>
+          </FormItem>
+        </FormField>
+
+        <div
+          v-if="form.values.settings?.email_draw?.enabled"
+          class="grid grid-cols-1 md:grid-cols-2 gap-4"
+        >
+          <FormField v-slot="{ field: componentField }" name="settings.email_draw.domain_suffix">
+            <FormItem>
+              <FormLabel>邮箱后缀 *</FormLabel>
+              <FormControl>
+                <Input type="text" placeholder="@unnc.edu.cn" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 前台仅输入 @ 前的部分，完整邮箱 = 前缀 + 此后缀 </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+
+          <FormField v-slot="{ field: componentField }" name="settings.email_draw.max_per_email">
+            <FormItem>
+              <FormLabel>每邮箱参与次数</FormLabel>
+              <FormControl>
+                <Input type="number" min="1" max="10" v-bind="componentField" />
+              </FormControl>
+              <FormDescription> 同一邮箱在本活动可发起的参与次数（1-10） </FormDescription>
+              <FormMessage />
+            </FormItem>
+          </FormField>
+        </div>
+
+        <FormField
+          v-slot="{ field: componentField }"
+          name="settings.email_draw.show_result_on_click"
+        >
+          <FormItem class="flex flex-row items-center justify-between rounded-lg border p-4">
+            <div class="space-y-0.5">
+              <FormLabel class="text-base">点击链接直接显示结果</FormLabel>
+              <FormDescription>
+                开启：手机点开邮件链接后直接显示抽奖结果（与大屏一致）；
+                关闭：点击仅确认参与，提示回到原提交页面（大屏）查看结果。
+              </FormDescription>
+            </div>
+            <FormControl>
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="(componentField as any).value"
+                :class="[
+                  'relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+                  (componentField as any).value ? 'bg-blue-600' : 'bg-gray-200',
+                ]"
+                @click="
+                  form.setFieldValue(
+                    'settings.email_draw.show_result_on_click',
+                    !(componentField as any).value,
+                  )
+                "
+              >
+                <span
+                  :class="[
+                    'pointer-events-none block h-5 w-5 rounded-full bg-white shadow-lg ring-0 transition-transform',
+                    (componentField as any).value ? 'translate-x-5' : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </FormControl>
+          </FormItem>
+        </FormField>
       </div>
     </form>
+
+    <!-- 粘性保存条 + 未保存离开守卫（Cmd/Ctrl+S）；取消语义由离开守卫接管 -->
+    <GuardedSave :dirty="isDirty" :on-save="onSave" :on-discard="onDiscard" />
   </div>
 </template>
 
@@ -328,7 +423,6 @@ import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import * as z from 'zod'
 import { toast } from 'vue-sonner'
-import { useScroll } from '@vueuse/core'
 
 import PageTitle from '@/components/ui/text/pageTitle.vue'
 import { Button } from '@/components/ui/button'
@@ -396,6 +490,17 @@ const formSchema = toTypedSchema(
             .optional(),
           kdocs_bind_code: z.string().max(50, '绑定码不能超过50个字符').optional(),
           kdocs_notify: z.boolean().optional(),
+          email_draw: z
+            .object({
+              enabled: z.boolean().optional(),
+              domain_suffix: z
+                .string()
+                .regex(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, '邮箱后缀格式不正确（如 @unnc.edu.cn）')
+                .optional(),
+              max_per_email: z.coerce.number().min(1, '至少 1 次').max(10, '最多 10 次').optional(),
+              show_result_on_click: z.boolean().optional(),
+            })
+            .optional(),
         })
         .optional(),
     })
@@ -429,21 +534,26 @@ const form = useForm({
       kdocs_field_map: { name: '', student_id: '', email: '', phone: '' },
       kdocs_bind_code: '',
       kdocs_notify: true,
+      email_draw: {
+        enabled: false,
+        domain_suffix: '',
+        max_per_email: 1,
+        show_result_on_click: false,
+      },
     },
   },
 })
 
-// 提交状态
-const isSubmitting = ref(false)
+// 表单值稳定序列化（isDirty 快照对比用）：键排序 + 数值/undefined 归一
+const serializeForm = (values: unknown): string => JSON.stringify(values)
 
-// 滚动监听
-const { y } = useScroll(window)
-const isAtBottom = computed(() => {
-  const scrollHeight = document.documentElement.scrollHeight
-  const clientHeight = document.documentElement.clientHeight
-  const scrollTop = y.value
-  return scrollTop + clientHeight >= scrollHeight - 10 // 10px容差
-})
+// 原始快照（loadActivity 后 / 创建模式 initialValues）；GuardedSave 的脏检测基准
+const originalSnapshot = ref('')
+
+const isDirty = computed(() => serializeForm(form.values) !== originalSnapshot.value)
+
+// 保存中状态（提交期间禁用输入的轻量标记；条内文案由 GuardedSave 自管）
+const isSubmitting = ref(false)
 
 // 加载活动数据（编辑模式）
 const loadActivity = async () => {
@@ -482,10 +592,18 @@ const loadActivity = async () => {
         },
         kdocs_bind_code: activity.settings?.kdocs_bind_code || '',
         kdocs_notify: activity.settings?.kdocs_notify !== false,
+        email_draw: {
+          enabled: activity.settings?.email_draw?.enabled === true,
+          domain_suffix: activity.settings?.email_draw?.domain_suffix || '',
+          max_per_email: activity.settings?.email_draw?.max_per_email || 1,
+          show_result_on_click: activity.settings?.email_draw?.show_result_on_click === true,
+        },
       },
     })
     selectedStatus.value = activity.status
     originalStatus.value = activity.status
+    // 编辑数据回填完成 → 以此为脏检测基准
+    originalSnapshot.value = serializeForm(form.values)
     // 向面包屑提供活动名（Admin > Activities > [活动名] > Edit）
     setActivityName(activity.name || '')
   } catch (error) {
@@ -516,8 +634,8 @@ const statusOptions = computed(() => [
   ...STATUS_TRANSITIONS[originalStatus.value],
 ])
 
-// 表单提交
-const onSubmit = form.handleSubmit(async (values) => {
+// 保存（GuardedSave 调用；返回 true 触发 ✓ 闪现，false 静默）
+const onSave = form.handleSubmit(async (values): Promise<boolean> => {
   isSubmitting.value = true
 
   try {
@@ -542,6 +660,12 @@ const onSubmit = form.handleSubmit(async (values) => {
         },
         kdocs_bind_code: values.settings?.kdocs_bind_code ?? '',
         kdocs_notify: values.settings?.kdocs_notify !== false,
+        email_draw: {
+          enabled: values.settings?.email_draw?.enabled === true,
+          domain_suffix: values.settings?.email_draw?.domain_suffix?.trim() || undefined,
+          max_per_email: values.settings?.email_draw?.max_per_email || 1,
+          show_result_on_click: values.settings?.email_draw?.show_result_on_click === true,
+        },
       },
     }
 
@@ -551,26 +675,36 @@ const onSubmit = form.handleSubmit(async (values) => {
       // 状态变化走专用端点（基本信息更新之后）
       if (selectedStatus.value !== originalStatus.value) {
         await adminActivityApi.updateActivityStatus(activityId.value, selectedStatus.value)
+        originalStatus.value = selectedStatus.value
       }
       toast.success('活动更新成功')
-    } else {
-      // 创建活动
-      await adminActivityApi.createActivity(formData as CreateActivityRequest)
-      toast.success('活动创建成功')
+      // 保存条模式：留在本页继续编辑，快照前移
+      originalSnapshot.value = serializeForm(form.values)
+      return true
     }
 
-    // 返回活动列表
+    // 创建是一次性动作：成功后跳列表（GuardedSave 不闪现）
+    await adminActivityApi.createActivity(formData as CreateActivityRequest)
+    toast.success('活动创建成功')
     router.push('/admin/activities')
+    return false
   } catch (error) {
     console.error('保存活动失败:', error)
     toast.error(isEditMode.value ? '更新活动失败' : '创建活动失败')
+    return false
   } finally {
     isSubmitting.value = false
   }
 })
 
-// 组件挂载时加载数据
+// 放弃更改：回填为原始快照
+const onDiscard = () => {
+  form.resetForm({ values: JSON.parse(originalSnapshot.value) })
+}
+
+// 组件挂载时加载数据（创建模式以初始值为基准）
 onMounted(() => {
+  if (!isEditMode.value) originalSnapshot.value = serializeForm(form.values)
   loadActivity()
 })
 </script>

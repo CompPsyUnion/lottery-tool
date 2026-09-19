@@ -12,5 +12,6 @@ router.use('/activities', require('./admin/activities').default)
 router.use('/prizes', require('./admin/prizes').default)
 router.use('/lottery-codes', require('./admin/lottery-code').default)
 router.use('/lottery-records', require('./admin/lottery-record').default)
+router.use('/audit', require('./audit').default)
 
 export default router

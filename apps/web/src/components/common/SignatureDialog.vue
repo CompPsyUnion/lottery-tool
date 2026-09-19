@@ -57,6 +57,17 @@
           </div>
 
           <div class="flex gap-2">
+            <!-- 必签模式下的撤销入口（抽奖页）：不直接关闭，交父组件走「确认撤销」流程 -->
+            <Button
+              v-if="dismissible === false && showUndo"
+              type="button"
+              variant="ghost"
+              class="text-red-600 hover:text-red-700 hover:bg-red-50"
+              :disabled="isSubmitting"
+              @click="emit('undo')"
+            >
+              撤销本次抽奖
+            </Button>
             <Button
               v-if="dismissible"
               type="button"
@@ -107,12 +118,15 @@ const props = defineProps<{
   errorMessage?: string
   /** false = 必签模式：无取消按钮、禁 ESC/遮罩/关闭按钮，仅提交成功后由父组件关闭 */
   dismissible?: boolean
+  /** true = 必签模式下显示「撤销本次抽奖」入口（抽奖页；管理端补签不显示） */
+  showUndo?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:visible', value: boolean): void
   (e: 'confirm', dataUrl: string): void
   (e: 'cancel'): void
+  (e: 'undo'): void
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)

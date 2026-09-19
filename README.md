@@ -12,7 +12,7 @@
 
 - **后端**：Node.js + Express + TypeORM 1.1 + PostgreSQL 18（迁移自动生成，启动即应用）
 - **前端**：Vue 3 + vue-router + Vite（SPA，`VITE_API_BASE_URL` 配置 API 地址）
-- **工程化**：pnpm workspace、ESLint 9（typescript-eslint）+ Prettier、husky 提交钩子、GitHub Actions 构建后端镜像至 GHCR
+- **工程化**：pnpm workspace、ESLint 9（typescript-eslint）+ Prettier、husky 提交钩子、GitHub Actions 构建后端镜像至 GHCR；管理端页面表单统一 [vue-guarded-save](https://www.npmjs.com/package/vue-guarded-save) 保存条（脏检测 + 未保存离开守卫 + Cmd/Ctrl+S）
 
 ## 环境
 
@@ -72,6 +72,13 @@ email-poster POST webhook 形式，无 SMTP）。
   （含签字）但不扣库存、不产生真实记录，且无视活动状态与起止时间
 - **签字确认**：线下抽奖可选开启（活动设置）；中奖后结果页手动进入必签签字板，
   未签记录可在活动详情的记录页补签
+- **邮箱即抽**：活动可选开启（设置后缀与每邮箱次数上限）——前台仅输入邮箱前缀，
+  系统发确认邮件，参与者点击邮件链接后执行抽奖（链接即邮箱所有权凭证）；
+  原提交页面通过长轮询自动展示结果；线下活动同样可用（链接路径无需管理员登录）；
+  「点击链接直接显示结果」默认关闭（手机仅确认参与，结果只在大屏展示），可按活动开启
+- **审计日志**：奖品库存/抽奖码数量的每次变动（前后值、delta）与操作者
+  （管理员用户名或参与者邮箱）全程结构化记录——抽奖/撤销/记录删除/奖品增删改/
+  码导入覆盖删除，`/admin/audit` 独立页查询（普通管理员仅自己活动，超管全量）
 - **金山表单接入**：金山表单（KDocs）提交经 Webhook 自动创建抽奖码（学号即抽奖码），
   并经系统邮件通道发送报名成功通知（原独立 Python 中间件 + Power Automate 方案已内嵌替代）；
   端点地址与 token 在活动详情页「Webhook 接入」卡片获取（token 已内嵌 URL，可直接粘贴），

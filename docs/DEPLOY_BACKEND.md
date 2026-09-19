@@ -40,7 +40,7 @@ docker compose logs -f lottery-backend
 | `POSTGRES_DB`                                   |          | `lottery_system`      | 数据库名                                                                                                |
 | `POSTGRES_PORT`                                 |          | `5432`                | postgres 对宿主机暴露的端口（默认**不暴露**，仅 docker 内网；需外部连库时在 compose 中取消 ports 注释） |
 | `DB_HOST`                                       |          | `postgres`            | 外部数据库时改为实际地址（见第三节）                                                                    |
-| `JWT_SECRET`                                    | ✓        | 占位值                | JWT 签名密钥（`openssl rand -hex 32`）                                                                  |
+| `JWT_SECRET`                                    | ✓        | 无（必填）            | JWT 签名密钥（`openssl rand -hex 32`）；**缺失服务拒绝启动**，compose 也不再提供默认值                  |
 | `JWT_EXPIRES_IN`                                |          | `24h`                 |                                                                                                         |
 | `BACKEND_PORT`                                  |          | `3000`                | 后端对宿主机暴露的端口                                                                                  |
 | `BACKEND_IMAGE`                                 |          | `...:latest`          | 镜像及版本锁定（见第四节）                                                                              |

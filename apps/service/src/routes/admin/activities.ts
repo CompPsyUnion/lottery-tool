@@ -12,6 +12,8 @@ import {
   validateLotteryCodeFormat,
 } from '../../utils/lottery-code-generator'
 import { AppDataSource } from '../../utils/database'
+import { requireActivityAccess as requireActivityAccessShared } from '../../middleware/activity-access'
+import * as AuditService from '../../services/audit.service'
 import { Activity } from '../../entities/activity.entity'
 import { LotteryCode } from '../../entities/lottery-code.entity'
 import * as ActivityService from '../../services/activity.service'
@@ -35,19 +37,8 @@ const validateRequest = (req: Request, res: Response, next: NextFunction): void 
   next()
 }
 
-// 验证活动存在且当前用户有权限
-const requireActivityAccess = async (activityId: string, req: Request): Promise<Activity> => {
-  const activity = await ActivityService.findById(parseInt(activityId))
-  if (!activity) {
-    throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
-  }
-
-  if ((req as any).user.role !== 'super_admin' && activity.created_by !== (req as any).user.id) {
-    throw createError('AUTH_INSUFFICIENT_PERMISSION', '只能访问自己创建的活动')
-  }
-
-  return activity
-}
+// 验证活动存在且当前用户有权限（共享实现，见 middleware/activity-access.ts）
+const requireActivityAccess = requireActivityAccessShared
 
 // 活动设置键级校验（创建与更新共用；POST 白名单重建、PUT 合并覆盖，见各 handler）
 const activitySettingsValidators = [
@@ -108,7 +99,65 @@ const activitySettingsValidators = [
     .withMessage('绑定码不能超过50个字符'),
 
   body('settings.kdocs_notify').optional().isBoolean().withMessage('通知开关必须是布尔值'),
+
+  // 邮箱即抽：开关 / 邮箱后缀 / 每邮箱参与上限
+  body('settings.email_draw.enabled')
+    .optional()
+    .isBoolean()
+    .withMessage('邮箱即抽开关必须是布尔值'),
+
+  body('settings.email_draw.domain_suffix')
+    .optional()
+    .matches(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/)
+    .withMessage('邮箱后缀格式不正确（如 @unnc.edu.cn）'),
+
+  body('settings.email_draw.max_per_email')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('每邮箱参与次数必须是1-10的整数'),
+
+  body('settings.email_draw.show_result_on_click')
+    .optional()
+    .isBoolean()
+    .withMessage('点击链接显示结果开关必须是布尔值'),
 ]
+
+/** 邮箱即抽配置归一化：后缀统一带 @ 前缀；返回 undefined 表示请求未涉及该键 */
+const normalizeEmailDrawPatch = (
+  settings: Record<string, unknown>,
+):
+  | {
+      enabled?: boolean
+      domain_suffix?: string
+      max_per_email?: number
+      show_result_on_click?: boolean
+    }
+  | undefined => {
+  if (settings.email_draw === undefined) return undefined
+  const raw =
+    settings.email_draw && typeof settings.email_draw === 'object'
+      ? (settings.email_draw as Record<string, unknown>)
+      : {}
+  const patch: {
+    enabled?: boolean
+    domain_suffix?: string
+    max_per_email?: number
+    show_result_on_click?: boolean
+  } = {}
+  if (raw.enabled !== undefined) patch.enabled = raw.enabled === true
+  if (typeof raw.domain_suffix === 'string' && raw.domain_suffix !== '') {
+    patch.domain_suffix = raw.domain_suffix.startsWith('@')
+      ? raw.domain_suffix
+      : `@${raw.domain_suffix}`
+  }
+  if (raw.max_per_email !== undefined) {
+    patch.max_per_email = Number.parseInt(String(raw.max_per_email), 10) || 1
+  }
+  if (raw.show_result_on_click !== undefined) {
+    patch.show_result_on_click = raw.show_result_on_click === true
+  }
+  return patch
+}
 
 /**
  * @route   GET /api/admin/activities
@@ -243,6 +292,17 @@ router.post(
         if (settings.kdocs_notify !== undefined) {
           activityData.settings.kdocs_notify = settings.kdocs_notify === true
         }
+        // 邮箱即抽（可选）；新建场景开启必须同时带后缀
+        const emailDraw = normalizeEmailDrawPatch(settings)
+        if (emailDraw) {
+          if (emailDraw.enabled === true && !emailDraw.domain_suffix) {
+            throw createError('VALIDATION_INVALID_FORMAT', '开启邮箱即抽需配置邮箱后缀')
+          }
+          activityData.settings.email_draw = {
+            ...((activityData.settings.email_draw as Record<string, unknown>) || {}),
+            ...emailDraw,
+          }
+        }
       }
 
       const activity = await ActivityService.createActivity(activityData)
@@ -340,6 +400,18 @@ router.put(
         }
         if (settings.kdocs_notify !== undefined) {
           merged.kdocs_notify = settings.kdocs_notify === true
+        }
+        // 邮箱即抽（可选）：键级合并（未出现的子键保留旧值）；开启态最终必须带后缀
+        const emailDraw = normalizeEmailDrawPatch(settings)
+        if (emailDraw) {
+          const mergedDraw = {
+            ...((merged.email_draw as Record<string, unknown>) || {}),
+            ...emailDraw,
+          }
+          if (mergedDraw.enabled === true && !mergedDraw.domain_suffix) {
+            throw createError('VALIDATION_INVALID_FORMAT', '开启邮箱即抽需配置邮箱后缀')
+          }
+          merged.email_draw = mergedDraw
         }
         updateData.settings = merged as Activity['settings']
       }
@@ -473,7 +545,10 @@ router.get(
     query('page').optional().isInt({ min: 1 }).withMessage('页码必须是正整数'),
     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('每页数量必须是1-100的整数'),
     query('search').optional().isLength({ max: 100 }).withMessage('搜索关键词不能超过100个字符'),
-    query('status').optional().isIn(['unused', 'used']).withMessage('状态只能是unused或used'),
+    query('status')
+      .optional()
+      .isIn(['unused', 'used', 'invalid'])
+      .withMessage('状态只能是unused、used或invalid'),
     query('has_participant_info')
       .optional()
       .isBoolean()
@@ -500,15 +575,63 @@ router.get(
               : undefined,
       })
 
+      // 附带各码抽奖记录数（删除警示「级联删除记录」与表格展示用；一次分组查询）
+      const recordCounts =
+        result.lottery_codes.length > 0
+          ? await LotteryCodeService.countRecordsByCodeIds(result.lottery_codes.map((c) => c.id))
+          : new Map<number, number>()
+      const lottery_codes = result.lottery_codes.map((code) => ({
+        ...code,
+        record_count: recordCounts.get(code.id) ?? 0,
+      }))
+
       res.json({
         success: true,
-        data: result,
+        data: { ...result, lottery_codes },
       })
     } catch (error) {
       next(error)
     }
   },
 )
+
+/**
+ * @route   GET /api/admin/activities/:id/lottery-codes/export
+ * @desc    导出抽奖码 CSV（UTF-8 BOM，Excel 可直接打开；排除测试码）
+ * @access  Private (Admin)
+ */
+router.get('/:id/lottery-codes/export', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activityId = req.params.id
+
+    await requireActivityAccess(activityId, req)
+
+    const codes = await AppDataSource.getRepository(LotteryCode).find({
+      where: { activity_id: parseInt(activityId), is_test: false },
+      order: { created_at: 'ASC' },
+    })
+
+    // UTF-8 BOM 使 Excel 正确识别编码；与导入格式互逆（抽奖码,姓名,手机,邮箱）
+    const escapeCsv = (value: string): string =>
+      /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value
+    const lines = ['抽奖码,姓名,手机,邮箱']
+    for (const code of codes) {
+      const info = code.participant_info || {}
+      lines.push(
+        [code.code, info.name ?? '', info.phone ?? '', info.email ?? '']
+          .map((cell) => escapeCsv(String(cell)))
+          .join(','),
+      )
+    }
+    const csv = '\uFEFF' + lines.join('\r\n') + '\r\n'
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+    res.setHeader('Content-Disposition', `attachment; filename="lottery_codes_${activityId}.csv"`)
+    res.send(csv)
+  } catch (error) {
+    next(error)
+  }
+})
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes/batch
@@ -597,19 +720,26 @@ router.post('/:id/lottery-codes/demo', async (req: Request, res: Response, next:
 const resolveBaseUrl = (req: Request): string => {
   if (process.env.BASE_URL) return process.env.BASE_URL.replace(/\/+$/, '')
 
-  // 协议链：X-Forwarded-Proto → X-Forwarded-Scheme → RFC7239 Forwarded；
-  // 均缺失时按主机启发式——公网域名 https（公网服务均为 TLS，明文也会被 308），
-  // 本机/内网 http（局域网明文部署）。不用 req.protocol：代理未透传时它恒为 http，
-  // 会压掉公网 https 兜底
-  const headerProto =
-    req.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
-    req.get('x-forwarded-scheme')?.split(',')[0]?.trim() ||
-    req.get('forwarded')?.match(/proto=(\w+)/i)?.[1]
+  // 域名：转发头 / Host——反向代理保留 Host，前后端分域部署时也是 API 真实域名
   const hostname = (
     req.get('x-forwarded-host')?.split(',')[0]?.trim() ||
     req.get('host') ||
     ''
   ).toLowerCase()
+
+  // 协议链：Origin 的 scheme → X-Forwarded-Proto → X-Forwarded-Scheme → RFC7239
+  // Forwarded → 主机启发式。Origin 最优先：浏览器视角的终端协议不会被中间层
+  // 污染（http 回源链会把 X-Forwarded-Proto 改写为 http）；
+  // 域名不用 Origin 的——那可能是前端（SPA）域名，webhook 打过去到不了后端
+  const originProto = req
+    .get('origin')
+    ?.match(/^https?:\/\//i)?.[0]
+    ?.replace('://', '')
+  const headerProto =
+    originProto ||
+    req.get('x-forwarded-proto')?.split(',')[0]?.trim() ||
+    req.get('x-forwarded-scheme')?.split(',')[0]?.trim() ||
+    req.get('forwarded')?.match(/proto=(\w+)/i)?.[1]
   const isLocalHost =
     hostname === '' ||
     hostname.startsWith('localhost') ||
@@ -622,6 +752,7 @@ const resolveBaseUrl = (req: Request): string => {
 
   if (hostname) return `${proto}://${hostname}`
 
+  // 无任何主机信息时才整取 Origin
   const origin = req.get('origin')
   if (origin) return origin.replace(/\/+$/, '')
 
@@ -782,27 +913,184 @@ router.post(
 
 /**
  * @route   POST /api/admin/activities/:id/lottery-codes/import
- * @desc    批量导入抽奖码
+ * @desc    批量导入/覆盖抽奖码（CSV 由前端解析为行数据）
+ *          upsert：同码更新参与者信息、新码创建；replace：先删全部 unused+invalid
+ *          业务码（保留 used 与测试码）再 upsert。逐行校验失败收集于 failed_rows
+ *          不拦截整批；配额超限整批拒绝（400）。覆盖/删除会级联删除关联抽奖记录。
  * @access  Private (Admin)
  */
 router.post(
   '/:id/lottery-codes/import',
+  [
+    body('codes').isArray({ min: 1, max: 1000 }).withMessage('codes 必须是包含1-1000个元素的数组'),
+    body('mode')
+      .optional()
+      .isIn(['upsert', 'replace'])
+      .withMessage('mode 只能是 upsert 或 replace'),
+  ],
+  validateRequest,
   logLotteryCodeOperation(OPERATION_TYPES.IMPORT_LOTTERY_CODE),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const activityId = req.params.id
+      const { codes, mode = 'upsert' } = req.body
+
+      const activity = await requireActivityAccess(activityId, req)
+
+      const result = await LotteryCodeService.importLotteryCodes(
+        activity,
+        codes as LotteryCodeService.ImportRowInput[],
+        mode,
+      )
+
+      // 审计：导入/覆盖（码量净变化 = 新建 - 删除；库存不动）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: result.mode === 'replace' ? 'CODE_REPLACE' : 'CODE_IMPORT',
+        delta: result.created.length - result.deleted_count,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `${result.mode === 'replace' ? '覆盖导入' : '导入'}：新增 ${result.created.length}，更新 ${result.updated.length}，删除 ${result.deleted_count}，失败 ${result.failed.length}${result.records_deleted > 0 ? `（级联记录 ${result.records_deleted}）` : ''}`,
+      })
+
+      // 全部行失败也返回 200：行级报告即载荷；400 仅用于结构错误与配额超限
+      res.status(200).json({
+        success: true,
+        data: {
+          mode: result.mode,
+          created_count: result.created.length,
+          updated_count: result.updated.length,
+          deleted_count: result.deleted_count,
+          records_deleted: result.records_deleted,
+          failed_rows: result.failed,
+          results: { created: result.created, updated: result.updated },
+        },
+        message: `抽奖码${mode === 'replace' ? '覆盖' : '导入'}完成：新增 ${result.created.length}，更新 ${result.updated.length}${
+          mode === 'replace' ? `，删除 ${result.deleted_count}` : ''
+        }，失败 ${result.failed.length}`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   POST /api/admin/activities/:id/lottery-codes/batch-delete
+ * @desc    按 id 批量删除抽奖码（允许已使用码——其抽奖记录将被级联删除）；
+ *          单个删除即传单元素数组。测试码恒不删。
+ * @access  Private (Admin)
+ */
+router.post(
+  '/:id/lottery-codes/batch-delete',
+  [
+    body('ids').isArray({ min: 1, max: 1000 }).withMessage('ids 必须是1-1000个元素的数组'),
+    body('ids.*').isInt({ min: 1 }).withMessage('id 必须是正整数'),
+  ],
+  validateRequest,
+  logLotteryCodeOperation(OPERATION_TYPES.BATCH_DELETE_LOTTERY_CODE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activityId = req.params.id
+      const { ids } = req.body
 
       await requireActivityAccess(activityId, req)
 
-      // 这里应该处理文件上传和解析
-      // 由于没有配置multer，先返回一个占位响应
+      const result = await LotteryCodeService.deleteCodesByIds(parseInt(activityId), ids)
+
+      const deletedIds = new Set(result.deleted.map((c) => c.id))
+      const usedDeleted = result.deleted.filter((c) => c.status === 'used').length
+
+      // 审计：码删除（码量净减少；含级联记录数）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: 'CODE_DELETE',
+        delta: -result.deleted.length,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `删除抽奖码 ${result.deleted.length} 个（含已使用 ${result.deleted.filter((c) => c.status === 'used').length}，级联记录 ${result.records_deleted}）`,
+      })
+
       res.json({
         success: true,
         data: {
-          imported_count: 0,
-          lottery_codes: [],
+          // 逐 id 结果（前端勾选场景需要知道每个 id 的结局）
+          results: ids.map((id: number) => ({
+            id,
+            success: deletedIds.has(id),
+            message: deletedIds.has(id)
+              ? '已删除'
+              : result.test_skipped.includes(id)
+                ? '测试码不可删除'
+                : '抽奖码不存在',
+          })),
+          summary: {
+            total: ids.length,
+            deleted: result.deleted.length,
+            failed: ids.length - result.deleted.length,
+            used_deleted: usedDeleted,
+            records_deleted: result.records_deleted,
+          },
         },
-        message: '批量导入功能开发中',
+        message: `已删除 ${result.deleted.length} 个抽奖码${
+          usedDeleted > 0 ? `（含已使用 ${usedDeleted} 个，关联记录已一并删除）` : ''
+        }`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   PUT /api/admin/activities/:id/lottery-codes/:codeId/participant-info
+ * @desc    更新抽奖码参与者信息（码本身与状态不可改）
+ * @access  Private (Admin)
+ */
+router.put(
+  '/:id/lottery-codes/:codeId/participant-info',
+  [
+    body('participant_info.name')
+      .optional()
+      .isLength({ min: 1, max: 100 })
+      .withMessage('姓名长度为1-100个字符'),
+
+    body('participant_info.phone')
+      .optional()
+      .isMobilePhone('zh-CN')
+      .withMessage('手机号格式不正确'),
+
+    body('participant_info.email').optional().isEmail().withMessage('邮箱格式不正确'),
+  ],
+  validateRequest,
+  logLotteryCodeOperation(OPERATION_TYPES.UPDATE_LOTTERY_CODE),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const activityId = req.params.id
+      const codeId = parseInt(req.params.codeId)
+
+      await requireActivityAccess(activityId, req)
+
+      const lotteryCode = await LotteryCodeService.findById(codeId)
+      if (!lotteryCode || lotteryCode.activity_id !== parseInt(activityId)) {
+        throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND', '抽奖码不存在')
+      }
+
+      const updated = await LotteryCodeService.updateParticipantInfo(
+        lotteryCode,
+        req.body.participant_info || {},
+      )
+
+      res.json({
+        success: true,
+        data: { lottery_code: updated },
+        message: '参与者信息已更新',
       })
     } catch (error) {
       next(error)
@@ -1101,6 +1389,21 @@ router.post(
         remaining_quantity: total_quantity,
         probability,
         sort_order: sort_order || 0,
+      })
+
+      // 审计：奖品创建（库存从 0 到 total）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: 'PRIZE_CREATE',
+        prize_name: prize.name,
+        quantity_before: 0,
+        quantity_after: prize.remaining_quantity,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `新增奖品「${prize.name}」（总量 ${prize.total_quantity}）`,
       })
 
       res.status(201).json({

@@ -28,19 +28,6 @@
 - **i18n**(开发中) - 完整的国际化支持，轻松切换多语言
 - **Shadcn UI** - 精美的UI组件库，提供现代化视觉体验
 
-### 后端
-
-后端仓库地址：[Lottery-Tool-Backend](https://github.com/buduan/Lottery-Tool-Backend)
-
-## 📚 接口文档
-
-详细的API接口文档可访问：[api-doc.lottery.ibuduan.com](http://api-doc.lottery.ibuduan.com)
-
-## 📷 项目截图
-
-![抽奖管理界面](https://via.placeholder.com/800x450.png?text=抽奖管理界面)
-![用户兑奖页面](https://via.placeholder.com/800x450.png?text=用户兑奖页面)
-
 ## 🛠️ 开发指南
 
 ```bash

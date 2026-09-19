@@ -1,14 +1,34 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { body, query, param, validationResult } from 'express-validator'
-import { In, MoreThanOrEqual } from 'typeorm'
+import { In } from 'typeorm'
 import { AppDataSource } from '../../utils/database'
 import { LotteryRecord } from '../../entities/lottery-record.entity'
 import * as PrizeService from '../../services/prize.service'
 import * as LotteryCodeService from '../../services/lottery-code.service'
 import * as OperationLogService from '../../services/operation-log.service'
+import { requireActivityAccess } from '../../middleware/activity-access'
+import * as AuditService from '../../services/audit.service'
+import { createError } from '../../utils/custom-error'
 import moment from 'moment'
 
 const router = express.Router()
+
+/** 非超管时记录列表查询追加属主过滤（record.activity 由 baseQuery 联查提供） */
+const applyOwnerScope = (req: Request, qb: any) => {
+  if ((req as any).user.role === 'super_admin') return qb
+  return qb.andWhere('activity.created_by = :ownerId', { ownerId: (req as any).user.id })
+}
+
+/** 逐条属主断言（详情/删除路径；记录的 activity 关系由 relations 提供） */
+const assertRecordsAccessible = (records: LotteryRecord[], req: Request): void => {
+  if ((req as any).user.role === 'super_admin') return
+  const uid = (req as any).user.id
+  for (const record of records) {
+    if (!record.activity || record.activity.created_by !== uid) {
+      throw createError('AUTH_INSUFFICIENT_PERMISSION', '只能访问自己创建的活动')
+    }
+  }
+}
 
 // 基础联查（活动/奖品/抽奖码/操作人），抽奖码的参与者信息在其JSON字段中
 const baseQuery = () =>
@@ -94,14 +114,22 @@ router.get(
 
       const offset = (page - 1) * limit
 
-      const [rows, count] = await applyFilters(baseQuery(), {
-        activity_id,
-        prize_id,
-        lottery_code,
-        start_date,
-        end_date,
-        draw_type,
-      })
+      // 指定活动时校验属主；未指定时非超管按属主过滤（IDOR 修复）
+      if (activity_id) {
+        await requireActivityAccess(activity_id, req)
+      }
+
+      const [rows, count] = await applyOwnerScope(
+        req,
+        applyFilters(baseQuery(), {
+          activity_id,
+          prize_id,
+          lottery_code,
+          start_date,
+          end_date,
+          draw_type,
+        }),
+      )
         .orderBy('record.created_at', 'DESC')
         .skip(Math.floor(offset))
         .take(parseInt(limit))
@@ -150,12 +178,20 @@ router.get(
 
       const { activity_id, start_date, end_date, draw_type } = req.query as any
 
-      const records = await applyFilters(baseQuery(), {
-        activity_id,
-        start_date,
-        end_date,
-        draw_type,
-      })
+      // 导出含参与者 PII：指定活动时校验属主，未指定时非超管仅导出自己的活动
+      if (activity_id) {
+        await requireActivityAccess(activity_id, req)
+      }
+
+      const records = await applyOwnerScope(
+        req,
+        applyFilters(baseQuery(), {
+          activity_id,
+          start_date,
+          end_date,
+          draw_type,
+        }),
+      )
         .orderBy('record.created_at', 'DESC')
         .getMany()
 
@@ -211,14 +247,22 @@ router.get(
   },
 )
 
-// 获取抽奖统计信息（同样必须在 GET /:id 之前注册）
+// 获取抽奖统计信息（同样必须在 GET /:id 之前注册；非超管按自己的活动统计）
 router.get('/stats/overview', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const repo = AppDataSource.getRepository(LotteryRecord)
+    // 统计口径统一挂属主过滤（innerJoin activity）
+    const scopeQB = () => {
+      const qb = repo.createQueryBuilder('record').innerJoin('record.activity', 'activity')
+      if ((req as any).user.role !== 'super_admin') {
+        qb.where('activity.created_by = :ownerId', { ownerId: (req as any).user.id })
+      }
+      return qb
+    }
 
-    const totalRecords = await repo.count()
+    const totalRecords = await scopeQB().getCount()
     // draw_type 是派生值：无操作员为线上，有操作员为线下
-    const onlineRecords = await repo.countBy({ operator_id: null } as any)
+    const onlineRecords = await scopeQB().andWhere('record.operator_id IS NULL').getCount()
     const offlineRecords = totalRecords - onlineRecords
 
     // 今日抽奖记录
@@ -236,9 +280,9 @@ router.get('/stats/overview', async (req: Request, res: Response, next: NextFunc
     monthStart.setHours(0, 0, 0, 0)
 
     const [todayRecords, weekRecords, monthRecords] = await Promise.all([
-      repo.count({ where: { created_at: MoreThanOrEqual(today) } }),
-      repo.count({ where: { created_at: MoreThanOrEqual(weekStart) } }),
-      repo.count({ where: { created_at: MoreThanOrEqual(monthStart) } }),
+      scopeQB().andWhere('record.created_at >= :d', { d: today }).getCount(),
+      scopeQB().andWhere('record.created_at >= :d', { d: weekStart }).getCount(),
+      scopeQB().andWhere('record.created_at >= :d', { d: monthStart }).getCount(),
     ])
 
     res.json({
@@ -285,6 +329,8 @@ router.get(
         })
       }
 
+      assertRecordsAccessible([record], req)
+
       res.json({
         success: true,
         data: record,
@@ -317,7 +363,7 @@ router.delete(
 
       const records = await AppDataSource.getRepository(LotteryRecord).find({
         where: { id: In(ids) },
-        relations: { prize: true, lotteryCode: true },
+        relations: { activity: true, prize: true, lotteryCode: true },
       })
 
       if (records.length === 0) {
@@ -327,8 +373,13 @@ router.delete(
         })
       }
 
+      assertRecordsAccessible(records, req)
+
       await AppDataSource.transaction(async (manager) => {
         for (const record of records) {
+          // 恢复前库存留存（审计用）
+          const before = record.prize ? record.prize.remaining_quantity : null
+
           // 恢复奖品库存
           if (record.prize) {
             await PrizeService.restoreStock(record.prize, 1, manager)
@@ -338,6 +389,25 @@ router.delete(
           if (record.lotteryCode) {
             await LotteryCodeService.markAsUnused(record.lotteryCode, manager)
           }
+
+          // 审计：管理员删除记录 → 库存恢复（同一事务）
+          await AuditService.record(
+            {
+              activity_id: record.activity_id,
+              action: 'RECORD_DELETE',
+              lottery_code: record.lotteryCode ? record.lotteryCode.code : null,
+              prize_name: record.prize ? record.prize.name : null,
+              quantity_before: before,
+              quantity_after: record.prize ? record.prize.remaining_quantity : before,
+              actor_type: 'admin',
+              actor: (req as any).user.username,
+              user_id: (req as any).user.id,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+              detail: `管理员删除抽奖记录 #${record.id}（恢复库存）`,
+            },
+            manager,
+          )
         }
 
         // 批量删除记录
@@ -392,7 +462,12 @@ router.delete(
         })
       }
 
+      assertRecordsAccessible([record], req)
+
       await AppDataSource.transaction(async (manager) => {
+        // 恢复前库存留存（审计用）
+        const before = record.prize ? record.prize.remaining_quantity : null
+
         // 恢复奖品库存
         if (record.prize) {
           await PrizeService.restoreStock(record.prize, 1, manager)
@@ -402,6 +477,25 @@ router.delete(
         if (record.lotteryCode) {
           await LotteryCodeService.markAsUnused(record.lotteryCode, manager)
         }
+
+        // 审计：管理员删除记录 → 库存恢复（同一事务）
+        await AuditService.record(
+          {
+            activity_id: record.activity_id,
+            action: 'RECORD_DELETE',
+            lottery_code: record.lotteryCode ? record.lotteryCode.code : null,
+            prize_name: record.prize ? record.prize.name : null,
+            quantity_before: before,
+            quantity_after: record.prize ? record.prize.remaining_quantity : before,
+            actor_type: 'admin',
+            actor: (req as any).user.username,
+            user_id: (req as any).user.id,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: `管理员删除抽奖记录 #${record.id}（恢复库存）`,
+          },
+          manager,
+        )
 
         // 删除记录
         await manager.getRepository(LotteryRecord).remove(record)

@@ -1,3 +1,5 @@
+import { BRAND_LOGO_DATA_URI } from './mail-brand'
+
 /**
  * 邮件 HTML 模板渲染（email-poster 内置模板，子路径 'email-poster/template'）。
  * 主题贴合 web 端：primary 即 apps/web 的 --primary（oklch 0.208 0.042 265.755 ≈ #0f172b），
@@ -14,6 +16,8 @@ interface EmailThemeLike {
   brandSubtitle: string
   primaryColor: string
   footerHtml: string
+  /** 品牌 logo（data URI 内嵌，不用外链——邮件客户端默认屏蔽远程图片） */
+  logo: string
 }
 
 interface CodeEmailContentLike {
@@ -30,6 +34,21 @@ interface CardEmailContentLike {
   preheader?: string
 }
 
+/**
+ * 后处理：仅保留亮色——剥 prefers-color-scheme:dark 媒体查询与 color-scheme meta，
+ * 暗色邮件客户端也按亮色渲染（贴合站点管理面板的亮色主题）。
+ * 同时把按钮改为全宽居中（display:block; width:100%; text-align:center）。
+ */
+function postProcessLight(html: string): string {
+  return html
+    .replace(
+      /<meta name="color-scheme"[^>]*>/gi,
+      '<meta name="color-scheme" content="light only" />',
+    )
+    .replace(/<meta name="supported-color-schemes"[^>]*>/gi, '')
+    .replace(/@media\s*\(prefers-color-scheme:\s*dark\)\s*\{[^{]*(?:\{[^}]*\}[^{}]*)*\}/g, '')
+}
+
 function siteTheme(): EmailThemeLike {
   const year = new Date().getUTCFullYear()
   return {
@@ -37,6 +56,7 @@ function siteTheme(): EmailThemeLike {
     brandSubtitle: BRAND_SUBTITLE,
     primaryColor: PRIMARY_COLOR,
     footerHtml: `此邮件由 ${BRAND_TITLE} 系统自动发送，请勿直接回复 · © ${year}`,
+    logo: BRAND_LOGO_DATA_URI,
   }
 }
 
@@ -49,15 +69,17 @@ const templateModule: Promise<{
 /** 注册验证码邮件（内置 code 模板：大号字距验证码、明暗自适应） */
 export async function renderCodeMail(code: string, ttlMinutes: number): Promise<string> {
   const { renderCodeEmail } = await templateModule
-  return renderCodeEmail(
-    {
-      code,
-      title: '您的验证码',
-      leadHtml: `您正在注册 <strong>${BRAND_TITLE}</strong> 账户，请使用以下验证码完成邮箱验证：`,
-      hintHtml: `验证码 ${ttlMinutes} 分钟内有效。如非本人操作，请忽略本邮件。`,
-      preheader: `您的注册验证码，${ttlMinutes} 分钟内有效`,
-    },
-    siteTheme(),
+  return postProcessLight(
+    renderCodeEmail(
+      {
+        code,
+        title: '您的验证码',
+        leadHtml: `您正在注册 <strong>${BRAND_TITLE}</strong> 账户，请使用以下验证码完成邮箱验证：`,
+        hintHtml: `验证码 ${ttlMinutes} 分钟内有效。如非本人操作，请忽略本邮件。`,
+        preheader: `您的注册验证码，${ttlMinutes} 分钟内有效`,
+      },
+      siteTheme(),
+    ),
   )
 }
 
@@ -65,15 +87,17 @@ export async function renderCodeMail(code: string, ttlMinutes: number): Promise<
 export async function renderTestMail(): Promise<string> {
   const { renderCardEmail } = await templateModule
   const sentAt = new Date().toISOString().replace('T', ' ').slice(0, 19)
-  return renderCardEmail(
-    {
-      title: '邮件通道测试',
-      bodyHtml:
-        '<p>这是一封测试邮件。如果您收到了它，说明邮件通道配置正确。</p>' +
-        `<p>发送时间：${sentAt} UTC</p>`,
-      preheader: `${BRAND_TITLE} 邮件通道测试`,
-    },
-    siteTheme(),
+  return postProcessLight(
+    renderCardEmail(
+      {
+        title: '邮件通道测试',
+        bodyHtml:
+          '<p>这是一封测试邮件。如果您收到了它，说明邮件通道配置正确。</p>' +
+          `<p>发送时间：${sentAt} UTC</p>`,
+        preheader: `${BRAND_TITLE} 邮件通道测试`,
+      },
+      siteTheme(),
+    ),
   )
 }
 
@@ -89,16 +113,43 @@ export async function renderKdocsNotifyMail(
       /[&<>"']/g,
       (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
     )
-  return renderCardEmail(
-    {
-      title: '报名成功',
-      bodyHtml:
-        `<p>${escapeHtml(participantName)}，您好：</p>` +
-        `<p>您在「${escapeHtml(activityName)}」的报名已确认，抽奖码已生成。</p>` +
-        `<p>您的抽奖码：<strong>${escapeHtml(code)}</strong></p>` +
-        '<p>活动开始后凭此抽奖码参与抽奖，请妥善保存。</p>',
-      preheader: '报名成功，您的抽奖码已生成，请查收',
-    },
-    siteTheme(),
+  return postProcessLight(
+    renderCardEmail(
+      {
+        title: '报名成功',
+        bodyHtml:
+          `<p>${escapeHtml(participantName)}，您好：</p>` +
+          `<p>您在「${escapeHtml(activityName)}」的报名已确认，抽奖码已生成。</p>` +
+          `<p>您的抽奖码：<strong>${escapeHtml(code)}</strong></p>` +
+          '<p>活动开始后凭此抽奖码参与抽奖，请妥善保存。</p>',
+        preheader: '报名成功，您的抽奖码已生成，请查收',
+      },
+      siteTheme(),
+    ),
+  )
+}
+
+/** 邮箱即抽参与确认（点击链接执行抽奖；不含结果） */
+export async function renderEmailDrawMail(activityName: string, link: string): Promise<string> {
+  const { renderCardEmail } = await templateModule
+  const escapeHtml = (text: string): string =>
+    text.replace(
+      /[&<>"']/g,
+      (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch] ?? ch,
+    )
+  return postProcessLight(
+    renderCardEmail(
+      {
+        title: '抽奖参与确认',
+        bodyHtml:
+          '<p>您好：</p>' +
+          `<p>您正在参与「${escapeHtml(activityName)}」的抽奖，请点击下方链接完成抽奖并查看结果：</p>` +
+          `<p style="margin:24px 0;text-align:center"><a href="${escapeHtml(link)}" style="display:block;padding:14px 0;background-color:${PRIMARY_COLOR};color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;font-size:16px;text-align:center">点击抽奖</a></p>` +
+          `<p style="word-break:break-all"><a href="${escapeHtml(link)}" style="color:${PRIMARY_COLOR}">${escapeHtml(link)}</a></p>` +
+          '<p>如果按钮无法点击，请复制上方链接到浏览器打开。若非本人操作，请忽略本邮件。</p>',
+        preheader: '点击链接完成抽奖并查看结果',
+      },
+      siteTheme(),
+    ),
   )
 }

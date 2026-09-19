@@ -20,7 +20,8 @@
 优先级规则（Vite 默认行为）：
 
 1. **构建平台注入的环境变量**（EdgeOne 控制台配置的）优先级最高
-2. 其次是 `apps/web/.env.production` 文件中的值（当前写死了 `https://lottery.ibuduan.com/api`，仅影响**本地**执行 `pnpm build` 的产物）
+2. 其次是 `apps/web/.env.production` 文件中的值（已注释示例占位；本地执行 `pnpm build`
+   时回落到 `http://localhost:3000`）
 
 也就是说：在 EdgeOne 上配置了 `VITE_API_BASE_URL` 后，`.env.production` 里的同名值不会生效，无需修改仓库文件。
 

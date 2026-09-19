@@ -56,6 +56,14 @@ const adminRoutes: RouteRecordRaw[] = [
             },
           },
           {
+            path: 'codes/:id',
+            name: 'Activity Codes',
+            component: () => import('../views/admin/lotteryCodeManagement.vue'),
+            meta: {
+              title: 'Codes',
+            },
+          },
+          {
             path: 'create',
             name: 'Create',
             component: () => import('../views/admin/activityEdit.vue'),
@@ -110,6 +118,14 @@ const adminRoutes: RouteRecordRaw[] = [
         component: () => import('../views/admin/superSettings.vue'),
         meta: {
           title: 'Super Settings',
+        },
+      },
+      {
+        path: 'audit',
+        name: 'Audit Log',
+        component: () => import('../views/admin/auditLog.vue'),
+        meta: {
+          title: 'Audit',
         },
       },
       {

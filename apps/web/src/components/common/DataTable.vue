@@ -85,7 +85,9 @@ const renderCellContent = (column: TableColumn, record: Record<string, unknown>,
               :key="column.key"
               :class="[getCellAlignClass(column.align), column.width ? `w-[${column.width}]` : '']"
             >
-              {{ column.title }}
+              <!-- title 支持传组件（如表头全选框）；字符串表头渲染行为不变 -->
+              <component :is="column.title" v-if="typeof column.title !== 'string'" />
+              <template v-else>{{ column.title }}</template>
             </TableHead>
           </TableRow>
         </TableHeader>

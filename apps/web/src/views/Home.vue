@@ -7,29 +7,43 @@
         <p class="text-xl md:text-2xl text-gray-600 mb-8">公平、透明、便捷的在线抽奖平台</p>
 
         <!-- 按钮区域 -->
-        <div v-if="!showParticipateForm" class="flex flex-col sm:flex-row gap-4 justify-center">
+        <div v-if="!showActivities" class="flex flex-col sm:flex-row gap-4 justify-center">
           <Button size="lg" class="px-8 py-3 text-lg" @click="goToAdmin"> 进入使用 </Button>
-          <Button
-            variant="outline"
-            size="lg"
-            class="px-8 py-3 text-lg"
-            @click="showParticipateForm = true"
-          >
+          <Button variant="outline" size="lg" class="px-8 py-3 text-lg" @click="openActivityList">
             参与活动
           </Button>
         </div>
 
-        <!-- 参与活动表单 -->
-        <div v-else class="max-w-md mx-auto">
-          <div class="flex flex-col sm:flex-row gap-4">
-            <Input
-              v-model="activityId"
-              placeholder="请输入主办方提供的活动id进入"
-              class="flex-1 bg-white"
-            />
-            <Button @click="participateActivity"> 参与活动 </Button>
+        <!-- 参与活动：列出当前进行中的活动（线上/线下），点击直接进入抽奖页 -->
+        <div v-else class="max-w-3xl mx-auto">
+          <div v-if="loadingActivities" class="text-gray-600 py-8">正在加载活动列表...</div>
+          <div v-else-if="activitiesError" class="text-red-600 py-8">{{ activitiesError }}</div>
+          <div v-else-if="openActivities.length === 0" class="text-gray-600 py-8">
+            暂无进行中的活动，请稍后再来
           </div>
-          <Button variant="ghost" class="mt-2 text-sm" @click="showParticipateForm = false">
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-left">
+            <Card
+              v-for="item in openActivities"
+              :key="item.id"
+              class="cursor-pointer bg-white/90 p-4 transition-shadow hover:shadow-lg"
+              @click="enterActivity(item.id)"
+            >
+              <div class="mb-1 flex items-center gap-2">
+                <Gift class="h-4 w-4 shrink-0 text-blue-600" />
+                <span class="truncate font-semibold text-gray-900">{{ item.name }}</span>
+                <span class="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-xs text-blue-700">
+                  {{ item.lottery_mode === 'online' ? '线上' : '线下' }}
+                </span>
+              </div>
+              <p class="min-h-10 text-sm text-gray-600">
+                {{ item.description || '暂无描述' }}
+              </p>
+              <p class="mt-2 text-xs text-gray-400">
+                {{ formatRange(item.start_time, item.end_time) }}
+              </p>
+            </Card>
+          </div>
+          <Button variant="ghost" class="mt-4 text-sm" @click="showActivities = false">
             返回
           </Button>
         </div>
@@ -109,62 +123,11 @@
     </section>
 
     <!-- 底部页面 -->
-    <footer class="bg-gray-50 py-12 px-4">
-      <div class="container mx-auto max-w-6xl">
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-          <!-- 其他服务 -->
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">不断同学</h3>
-            <ul class="space-y-2">
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">主页</a>
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">抽奖工具</a>
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors">实验室</a>
-              </li>
-            </ul>
-          </div>
-
-          <!-- 友情链接 -->
-          <div>
-            <h3 class="text-lg font-semibold text-gray-900 mb-4">友情链接</h3>
-            <ul class="space-y-2">
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴A</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴B</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴C</a
-                >
-              </li>
-              <li>
-                <a href="#" class="text-gray-600 hover:text-blue-600 transition-colors"
-                  >合作伙伴D</a
-                >
-              </li>
-            </ul>
-          </div>
-        </div>
-
-        <!-- ICP备案号 -->
-        <div class="border-t border-gray-200 pt-8 text-center">
-          <p class="text-gray-500 text-sm">
-            © 2025 不断同学创意网络科技工作室. MIT Licence. |
-            <a href="#" class="hover:text-blue-600 transition-colors"
-              >ICP备案号：京ICP备XXXXXXXX号</a
-            >
-          </p>
-        </div>
+    <footer class="bg-gray-50 py-8 px-4">
+      <div class="container mx-auto max-w-6xl text-center">
+        <p class="text-gray-500 text-sm">
+          © {{ new Date().getFullYear() }} CompPsyUnion · MIT License
+        </p>
       </div>
     </footer>
   </div>
@@ -173,30 +136,55 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { Gift } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { lotteryApi } from '@/api'
+import type { OpenActivitySummary } from '@/types/api'
 
 // 路由实例
 const router = useRouter()
 
-// 响应式数据
-const showParticipateForm = ref(false)
-const activityId = ref('')
+// 参与活动：公开活动列表（进行中，线上/线下均含）
+const showActivities = ref(false)
+const openActivities = ref<OpenActivitySummary[]>([])
+const loadingActivities = ref(false)
+const activitiesError = ref('')
+
+const openActivityList = async () => {
+  showActivities.value = true
+  loadingActivities.value = true
+  activitiesError.value = ''
+  try {
+    const res = await lotteryApi.listOpenActivities()
+    openActivities.value = res.activities
+  } catch (err) {
+    activitiesError.value = err instanceof Error ? err.message : '获取活动列表失败'
+  } finally {
+    loadingActivities.value = false
+  }
+}
+
+// 点击活动卡片进入对应抽奖页
+const enterActivity = (id: number) => {
+  router.push({ path: '/lottery', query: { activityId: String(id) } })
+}
+
+// 活动时间范围展示（缺失侧不限制）
+const formatRange = (start?: string | null, end?: string | null): string => {
+  const fmt = (t?: string | null) =>
+    t ? new Date(t).toLocaleString('zh-CN', { dateStyle: 'short', timeStyle: 'short' }) : null
+  const s = fmt(start)
+  const e = fmt(end)
+  if (!s && !e) return '长期开放'
+  if (!e) return `开始于 ${s}`
+  if (!s) return `截止 ${e}`
+  return `${s} ~ ${e}`
+}
 
 // 跳转到管理页面
 const goToAdmin = () => {
   router.push('/admin')
-}
-
-// 参与活动
-const participateActivity = () => {
-  if (activityId.value.trim()) {
-    router.push({
-      path: '/lottery',
-      query: { activityId: activityId.value.trim() },
-    })
-  }
 }
 </script>
 

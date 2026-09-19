@@ -35,6 +35,15 @@ export async function checkCodeSendLimit(
   return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
 }
 
+/** 邮箱即抽确认邮件的发送频控（独立 flow：同邮箱 1/min、10/day） */
+export async function checkEmailDrawSendLimit(
+  email: string,
+): Promise<{ allowed: boolean; message?: string }> {
+  const limiter = await limiterPromise
+  const r = limiter.checkTarget('emaildraw', email)
+  return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
+}
+
 export async function checkTestSendLimit(
   userKey: string,
 ): Promise<{ allowed: boolean; message?: string }> {

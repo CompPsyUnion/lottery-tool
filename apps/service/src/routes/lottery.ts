@@ -1,17 +1,23 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { body, validationResult } from 'express-validator'
-import { optionalAuth, authenticateToken, requireAdmin } from '../middleware/auth'
+import { authenticateToken, requireAdmin } from '../middleware/auth'
 import { logLotteryDraw } from '../middleware/operation-logger'
 import { createError } from '../utils/custom-error'
 import { AppDataSource } from '../utils/database'
 import { Activity } from '../entities/activity.entity'
 import { LotteryRecord } from '../entities/lottery-record.entity'
 import { Prize } from '../entities/prize.entity'
+import { LotteryCode } from '../entities/lottery-code.entity'
+import { generateLotteryCode } from '../utils/lottery-code-generator'
+import { renderEmailDrawMail } from '../utils/mail-theme'
 import * as ActivityService from '../services/activity.service'
 import * as LotteryCodeService from '../services/lottery-code.service'
 import * as PrizeService from '../services/prize.service'
 import * as LotteryRecordService from '../services/lottery-record.service'
-import { OPERATION_TYPES } from '../services/operation-log.service'
+import * as MailService from '../services/mail.service'
+import { checkEmailDrawSendLimit } from '../services/email-code.service'
+import * as AuditService from '../services/audit.service'
+import { OPERATION_TYPES, log as writeOperationLog } from '../services/operation-log.service'
 
 const router = express.Router()
 
@@ -23,6 +29,43 @@ const validateRequest = (req: Request, res: Response, next: NextFunction): void 
   }
   next()
 }
+
+/**
+ * @route   GET /api/lottery/activities
+ * @desc    公开的可参与活动列表（进行中，线上/线下均列出；首页「参与活动」直接点入）
+ * @access  Public
+ */
+router.get('/activities', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const activities = await AppDataSource.getRepository(Activity)
+      .createQueryBuilder('activity')
+      .where('activity.status = :status', { status: 'active' })
+      .orderBy('activity.created_at', 'DESC')
+      .getMany()
+
+    // 时间窗过滤（active 但未到开始/已过结束的不列出；null 安全判定复用共享逻辑）
+    const open = activities.filter(
+      (activity) => ActivityService.getActivityOpenState(activity).open === true,
+    )
+
+    // 只返回公开字段（不含 settings / webhook 凭据）；线下活动抽奖页会提示需管理员登录操作
+    res.json({
+      success: true,
+      data: {
+        activities: open.map((activity) => ({
+          id: activity.id,
+          name: activity.name,
+          description: activity.description,
+          lottery_mode: activity.lottery_mode,
+          start_time: activity.start_time,
+          end_time: activity.end_time,
+        })),
+      },
+    })
+  } catch (error) {
+    next(error)
+  }
+})
 
 /**
  * @route   GET /api/lottery/activities/:id
@@ -60,6 +103,14 @@ router.get('/activities/:id', async (req: Request, res: Response, next: NextFunc
             require_signature: activity.settings?.require_signature === true,
             // 抽奖页据此设置输入框 maxlength/输入过滤（此前不透出导致 12 位格式码被截断）
             lottery_code_format: activity.settings?.lottery_code_format || '8_digit_number',
+            // 邮箱即抽：开启时抽奖页切换为邮箱前缀输入（后缀展示 + 次数限制）
+            email_draw: {
+              enabled: getEmailDrawSettings(activity).enabled === true,
+              domain_suffix: getEmailDrawSettings(activity).domain_suffix || '',
+              max_per_email: getEmailDrawSettings(activity).max_per_email || 1,
+              // 默认 false：点击链接的设备仅确认参与，回原提交页（大屏）查看结果
+              show_result_on_click: getEmailDrawSettings(activity).show_result_on_click === true,
+            },
           },
         },
         prizes: prizes.map((prize) => ({
@@ -156,6 +207,22 @@ router.post(
               description: demoPrize.description,
             }
           }
+          // 审计：测试码抽奖（无库存副作用，前后相同；is_test 标记）
+          await AuditService.record(
+            {
+              activity_id: parseInt(activityId),
+              action: 'DRAW_TEST',
+              lottery_code: lotteryCodeRecord.code,
+              prize_name: demoPrize ? demoPrize.name : null,
+              quantity_before: demoPrize ? demoPrize.remaining_quantity : null,
+              quantity_after: demoPrize ? demoPrize.remaining_quantity : null,
+              is_test: true,
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent'),
+              detail: demoWinner ? '测试抽奖中奖（无副作用）' : '测试抽奖未中奖（无副作用）',
+            },
+            manager,
+          )
           return {
             responseData: demoData,
             message: demoWinner ? '恭喜您中奖了！' : '很遗憾，您没有中奖',
@@ -193,6 +260,9 @@ router.post(
           { manager },
         )
 
+        // 库存前值留存（审计用）
+        const stockBefore = selectedPrizeRecord ? selectedPrizeRecord.remaining_quantity : null
+
         if (selectedPrizeRecord && selectedPrizeRecord.remaining_quantity > 0) {
           isWinner = true
           selectedPrize = selectedPrizeRecord
@@ -216,6 +286,28 @@ router.post(
             is_winner: isWinner,
             ip_address: req.ip,
             user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+
+        // 审计：本次抽奖的库存前后与参与者（同一事务，与库存变更原子）
+        const participantInfoBody = (req.body.participant_info || {}) as {
+          name?: string
+          email?: string
+        }
+        await AuditService.record(
+          {
+            activity_id: parseInt(activityId),
+            action: 'DRAW_ONLINE',
+            lottery_code: lotteryCodeRecord.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: stockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : stockBefore,
+            actor_type: participantInfoBody.email ? 'participant' : 'system',
+            actor: participantInfoBody.email || participantInfoBody.name || null,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: isWinner ? '线上抽奖中奖' : '线上抽奖未中奖',
           },
           manager,
         )
@@ -249,6 +341,472 @@ router.post(
         data: responseData,
         message,
       })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   POST /api/lottery/activities/:id/undo-draw
+ * @desc    撤销一次抽奖（签字完成前）：中奖恢复奖品库存、抽奖码置回未使用、删除本次记录。
+ *          线上抽奖无登录态，凭「记录 id + 本次抽奖码」作为归属凭证（与抽奖本身同信任级）；
+ *          测试码抽奖无副作用，直接返回成功。
+ * @access  Public（受全局 /lottery 限流）
+ */
+router.post(
+  '/activities/:id/undo-draw',
+  [
+    body('record_id').isInt({ min: 1 }).withMessage('记录ID必须是正整数'),
+    body('lottery_code').notEmpty().withMessage('抽奖码不能为空'),
+  ],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const { record_id, lottery_code: lotteryCode } = req.body
+
+      const record = await AppDataSource.getRepository(LotteryRecord).findOne({
+        where: { id: record_id },
+        relations: { activity: true, prize: true, lotteryCode: true },
+      })
+      if (!record || record.activity_id !== activityId) {
+        throw createError('BUSINESS_LOTTERY_RECORD_NOT_FOUND', '抽奖记录不存在')
+      }
+
+      // 归属凭证：撤销者必须持有本次抽奖码（与抽奖入口同信任级）
+      if (!record.lotteryCode || record.lotteryCode.code !== lotteryCode.trim()) {
+        throw createError('AUTH_INSUFFICIENT_PERMISSION', '抽奖码与本次记录不匹配')
+      }
+
+      // 测试码抽奖：无库存/状态副作用，直接成功（测试码与测试记录保留复用）
+      if (record.is_test) {
+        return res.json({
+          success: true,
+          data: { restored: true, is_test: true },
+          message: '测试抽奖无实际副作用',
+        })
+      }
+
+      // 签字是最终确认：已签字的记录不可撤销
+      if (record.signature_status === 'signed') {
+        throw createError('BUSINESS_SIGNATURE_EXISTS', '已签字确认的抽奖不可撤销')
+      }
+
+      await AppDataSource.transaction(async (manager) => {
+        // 恢复前库存留存（审计用）
+        const restoreBefore =
+          record.is_winner && record.prize ? record.prize.remaining_quantity : null
+
+        // 中奖恢复库存（未中奖无奖品可恢复）
+        if (record.is_winner && record.prize_id) {
+          await PrizeService.restoreStock(record.prize!, 1, manager)
+        }
+        // 抽奖码置回未使用（可再次参与）
+        await LotteryCodeService.markAsUnused(record.lotteryCode!, manager)
+        // 删除本次记录
+        await manager.getRepository(LotteryRecord).remove(record)
+
+        // 审计：撤销抽奖（库存恢复前后与邮箱凭证，同一事务）
+        await AuditService.record(
+          {
+            activity_id: activityId,
+            action: 'UNDO_DRAW',
+            lottery_code: record.lotteryCode!.code,
+            prize_name: record.prize ? record.prize.name : null,
+            quantity_before: restoreBefore,
+            quantity_after:
+              record.is_winner && record.prize ? record.prize.remaining_quantity : restoreBefore,
+            actor_type: 'email',
+            actor: record.lotteryCode!.participant_info?.email || null,
+            is_test: false,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: record.is_winner ? '撤销中奖抽奖，库存恢复' : '撤销未中奖抽奖',
+          },
+          manager,
+        )
+      })
+
+      await writeOperationLog({
+        user_id: record.operator_id ?? null,
+        operation_type: 'UNDO_LOTTERY_DRAW',
+        operation_detail: `撤销抽奖：${lotteryCode}${record.is_winner && record.prize ? `（恢复库存：${record.prize.name}）` : ''}`,
+        target_type: 'ACTIVITY',
+        target_id: activityId,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
+
+      res.json({
+        success: true,
+        data: { restored: true, is_test: false },
+        message: record.is_winner
+          ? '已撤销本次抽奖，奖品库存已恢复'
+          : '已撤销本次抽奖，抽奖码已恢复可用',
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+// ==================== 邮箱即抽（无预输入抽奖码） ====================
+
+// 前缀合法字符（本地部分子集）：字母/数字/点/下划线/连字符
+const EMAIL_PREFIX_RE = /^[A-Za-z0-9._-]{1,64}$/
+
+interface EmailDrawSettings {
+  enabled?: boolean
+  domain_suffix?: string
+  max_per_email?: number
+  /** 点击链接设备是否直接显示结果（默认 false=仅确认，回原提交页查看） */
+  show_result_on_click?: boolean
+}
+
+const getEmailDrawSettings = (activity: Activity): EmailDrawSettings => {
+  const raw = (activity.settings as Record<string, unknown> | null)?.email_draw
+  return raw && typeof raw === 'object' ? (raw as EmailDrawSettings) : {}
+}
+
+/** 该邮箱在活动下的全部业务码（participant_info.email 精确匹配） */
+const findEmailCodes = (activityId: number, email: string): Promise<LotteryCode[]> =>
+  AppDataSource.getRepository(LotteryCode)
+    .createQueryBuilder('code')
+    .where('code.activity_id = :activityId', { activityId })
+    .andWhere('code.is_test = false')
+    .andWhere(`code.participant_info->>'email' = :email`, { email })
+    .orderBy('code.created_at', 'ASC')
+    .getMany()
+
+/**
+ * @route   POST /api/lottery/activities/:id/email-draw/request
+ * @desc    邮箱即抽：提交邮箱前缀 → 生成（或复用待用）抽奖码并发确认邮件；
+ *          参与者点击邮件链接（?edraw=code）后才真正执行抽奖
+ * @access  Public（/lottery 全局限流 + 每邮箱 1/min、10/day 发送频控）
+ */
+router.post(
+  '/activities/:id/email-draw/request',
+  [body('email_prefix').notEmpty().withMessage('邮箱前缀不能为空')],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const prefix = String(req.body.email_prefix || '')
+        .trim()
+        .toLowerCase()
+
+      const activity = await ActivityService.findById(activityId)
+      if (!activity) throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
+
+      const emailDraw = getEmailDrawSettings(activity)
+      if (emailDraw.enabled !== true) {
+        throw createError('VALIDATION_INVALID_FORMAT', '该活动未开启邮箱即抽')
+      }
+      const suffix = emailDraw.domain_suffix || ''
+      if (!suffix.startsWith('@')) {
+        throw createError('SYSTEM_MAIL_NOT_CONFIGURED', '活动邮箱后缀未配置')
+      }
+      if (!EMAIL_PREFIX_RE.test(prefix)) {
+        throw createError(
+          'VALIDATION_INVALID_FORMAT',
+          '邮箱前缀仅支持字母、数字、点、下划线、连字符',
+        )
+      }
+      const email = `${prefix}${suffix.toLowerCase()}`
+
+      // 活动须在进行中（与真实码抽奖一致）
+      const openState = ActivityService.getActivityOpenState(activity)
+      if (!openState.open) {
+        throw createError('BUSINESS_ACTIVITY_NOT_STARTED', openState.message || '活动不可参与')
+      }
+
+      // 参与上限优先于频控：已达上限的邮箱应听到「达上限」而非「太频繁」
+      const maxPerEmail = emailDraw.max_per_email || 1
+      const codes = await findEmailCodes(activityId, email)
+      const usedCount = codes.filter((c) => c.status === 'used').length
+      if (usedCount >= maxPerEmail) {
+        throw createError('VALIDATION_OUT_OF_RANGE', `该邮箱参与次数已达上限（${maxPerEmail} 次）`)
+      }
+
+      // 每邮箱发送频控（幂等重发同样计入，防邮件轰炸）
+      const limit = await checkEmailDrawSendLimit(email)
+      if (!limit.allowed) {
+        throw createError('AUTH_TOO_MANY_REQUESTS', limit.message || '发送过于频繁')
+      }
+
+      let lotteryCode = codes.find((c) => c.status === 'unused')
+
+      if (!lotteryCode) {
+        // 生成新码（占用活动码配额；撞码重试）
+        const settings = (activity.settings as Record<string, unknown>) || {}
+        const format = (settings.lottery_code_format as string) || '8_digit_number'
+        const maxLotteryCodes = (settings.max_lottery_codes as number) || 1000
+        const existingCount = await LotteryCodeService.countByActivity(activityId)
+        if (existingCount + 1 > maxLotteryCodes) {
+          throw createError(
+            'VALIDATION_OUT_OF_RANGE',
+            `参与人数将达到活动最大抽奖码限制 ${maxLotteryCodes}`,
+          )
+        }
+        const existingCodes = await LotteryCodeService.getAllCodesForActivity(activityId)
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const candidate = generateLotteryCode(format)
+          if (!existingCodes.includes(candidate)) {
+            lotteryCode = await AppDataSource.getRepository(LotteryCode).save({
+              activity_id: activityId,
+              code: candidate,
+              participant_info: { email },
+              status: 'unused',
+            })
+            break
+          }
+        }
+        if (!lotteryCode) {
+          throw createError('SYSTEM_INTERNAL_ERROR', '生成抽奖码失败，请重试')
+        }
+      }
+
+      // 确认邮件（点击链接 → /lottery?activityId=&edraw=code → 前端用公开 draw 端点执行抽奖）
+      const mailConfig = await MailService.getMailConfig()
+      if (!mailConfig?.postUrl) {
+        throw createError('SYSTEM_MAIL_NOT_CONFIGURED', '邮件通道未配置，请联系管理员')
+      }
+      // 前端地址取提交页来源（Origin/Referer 即抽奖页），兜底请求主机
+      const frontendBase =
+        req.get('origin') ||
+        (req.get('referer') ? new URL(req.get('referer')!).origin : undefined) ||
+        `${req.protocol}://${req.get('host')}`
+      // 独立确认子页（不占用 /lottery 主路由——提交页在那边长轮询，互不干扰）
+      const link = `${frontendBase}/edraw/${activityId}?code=${lotteryCode.code}`
+
+      await MailService.sendMail(mailConfig, {
+        to: email,
+        subject: `抽奖参与确认：「${activity.name}」`,
+        body: await renderEmailDrawMail(activity.name, link),
+        html: true,
+      })
+
+      // 审计：邮箱即抽建码（码量 +1，不动库存）
+      await AuditService.record({
+        activity_id: activityId,
+        action: 'CODE_CREATE',
+        lottery_code: lotteryCode.code,
+        delta: 1,
+        actor_type: 'email',
+        actor: email,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: '邮箱即抽请求建码',
+      })
+
+      await writeOperationLog({
+        user_id: null,
+        operation_type: OPERATION_TYPES.EMAIL_DRAW_REQUEST,
+        operation_detail: `邮箱即抽请求: ${email}（码 ${lotteryCode.code}）`,
+        target_type: 'ACTIVITY',
+        target_id: activityId,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent') || null,
+      })
+
+      res.status(200).json({
+        success: true,
+        data: { sent: true, email },
+        message: `确认邮件已发送至 ${email}，请在邮箱中点击链接完成抽奖`,
+      })
+    } catch (error) {
+      next(error)
+    }
+  },
+)
+
+/**
+ * @route   GET /api/lottery/activities/:id/email-draw/status
+ * @desc    邮箱即抽状态（供提交页长轮询）：none / pending / drawn（drawn 附结果摘要；
+ *          不含抽奖码——邮箱可被他人枚举，码仅随邮件发给本人，点击设备方可撤销）
+ * @access  Public（wait=1 时最长挂 20s，每秒查库，状态变化即返）
+ */
+router.get('/activities/:id/email-draw/status', async (req, res, next) => {
+  try {
+    const activityId = parseInt(req.params.id)
+    const email = String(req.query.email || '')
+      .trim()
+      .toLowerCase()
+    const wait = req.query.wait === '1'
+
+    if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      throw createError('VALIDATION_INVALID_FORMAT', '邮箱格式不正确')
+    }
+
+    // 长轮询：pending 时最多挂 20 秒等待点击设备完成抽奖
+    const deadline = Date.now() + 20_000
+    while (true) {
+      const codes = await findEmailCodes(activityId, email)
+      // 看最新一次请求的码（created_at 升序取末尾）：旧轮已抽的 used 码不应让
+      // 新一轮提交立刻误报 drawn（修复：发确认邮件后直接弹旧结果）
+      const latestCode = codes.length > 0 ? codes[codes.length - 1] : null
+      const drawnCode = latestCode && latestCode.status === 'used' ? latestCode : null
+      if (drawnCode) {
+        const record = await AppDataSource.getRepository(LotteryRecord).findOne({
+          where: { lottery_code_id: drawnCode.id, is_test: false },
+          relations: { prize: true },
+          order: { created_at: 'DESC' },
+        })
+        return res.json({
+          success: true,
+          data: {
+            state: 'drawn',
+            result: record
+              ? {
+                  is_winner: record.is_winner,
+                  prize: record.prize
+                    ? { name: record.prize.name, description: record.prize.description }
+                    : null,
+                  created_at: record.created_at,
+                }
+              : { is_winner: false, prize: null, created_at: null },
+          },
+        })
+      }
+
+      // 长轮询：wait=1 且存在待用请求（pending）时挂起等点击设备完成抽奖；
+      // none（无请求，如邮箱拼错）与超时立即返回当前状态
+      const hasPending = codes.some((c) => c.status === 'unused')
+      if (!wait || !hasPending || Date.now() >= deadline) {
+        return res.json({
+          success: true,
+          data: { state: codes.length > 0 ? 'pending' : 'none' },
+        })
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+    }
+  } catch (error) {
+    next(error)
+  }
+})
+
+/**
+ * @route   POST /api/lottery/activities/:id/email-draw/confirm
+ * @desc    邮箱即抽确认链接的执行端点：抽奖码即凭证（码只发给本人邮箱）；
+ *          执行后走完整抽奖事务（含审计）。
+ * @access  Public（双凭证即鉴权）
+ */
+router.post(
+  '/activities/:id/email-draw/confirm',
+  [body('code').notEmpty().withMessage('抽奖码不能为空')],
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const errors = validationResult(req)
+      if (!errors.isEmpty()) {
+        return res.status(400).json({
+          success: false,
+          message: '参数验证失败',
+          errors: errors.array(),
+        })
+      }
+
+      const activityId = parseInt(req.params.id)
+      const { code } = req.body
+
+      const activity = await ActivityService.findById(activityId)
+      if (!activity) throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
+
+      // 复用公开 draw 的完整事务（库存/记录/审计）——由 confirm 路由内部转发实现，
+      // 等价于 lotteryApi.draw(code)（token 已验证，走标准 draw 语义）
+      const { responseData, message } = await AppDataSource.transaction(async (manager) => {
+        const lc = await manager.getRepository(LotteryCode).findOneBy({
+          activity_id: activityId,
+          code,
+        })
+        if (!lc) throw createError('BUSINESS_LOTTERY_CODE_NOT_FOUND')
+
+        const canStart = ActivityService.canStartLottery(activity)
+        if (!canStart.canStart) {
+          throw createError('BUSINESS_ACTIVITY_NOT_STARTED', canStart.reason)
+        }
+        if (lc.status === 'used') {
+          throw createError('BUSINESS_LOTTERY_CODE_USED')
+        }
+
+        let selectedPrize: Prize | null = null
+        const stockBefore = await (async () => {
+          const sel = await PrizeService.selectByProbability(activityId, activity, { manager })
+          if (sel && sel.remaining_quantity > 0) {
+            selectedPrize = sel
+            return sel.remaining_quantity
+          }
+          return sel ? sel.remaining_quantity : null
+        })()
+        if (selectedPrize) {
+          await PrizeService.deductStock(selectedPrize, 1, manager)
+        }
+        await LotteryCodeService.markAsUsed(lc, manager)
+        const record = await LotteryRecordService.createRecord(
+          {
+            activity_id: activityId,
+            lottery_code_id: lc.id,
+            prize_id: selectedPrize ? selectedPrize.id : null,
+            is_winner: !!selectedPrize,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+        await AuditService.record(
+          {
+            activity_id: activityId,
+            action: 'DRAW_ONLINE',
+            lottery_code: lc.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: stockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : stockBefore,
+            actor_type: 'email',
+            actor: (lc.participant_info as Record<string, unknown>)?.email as string,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: '邮箱即抽确认链接抽奖',
+          },
+          manager,
+        )
+        const data: Record<string, unknown> = {
+          is_winner: !!selectedPrize,
+          lottery_record: { id: record.id, created_at: record.created_at },
+          lottery_code: {
+            code: lc.code,
+            participant_info: { email: (lc.participant_info as Record<string, unknown>)?.email },
+          },
+        }
+        if (selectedPrize) {
+          data.prize = {
+            id: selectedPrize.id,
+            name: selectedPrize.name,
+            description: selectedPrize.description,
+          }
+        }
+        return {
+          responseData: data,
+          message: selectedPrize ? '恭喜您中奖了！' : '很遗憾，您没有中奖',
+        }
+      })
+
+      res.json({ success: true, data: responseData, message })
     } catch (error) {
       next(error)
     }
@@ -381,6 +939,8 @@ router.post(
 
         let isWinner = false
         let selectedPrize: Prize | null = null
+        // 库存前值留存（审计用；两分支统一）
+        let offlineStockBefore: number | null = null
 
         // 如果指定了奖品ID，使用指定奖品
         if (prize_id) {
@@ -395,6 +955,7 @@ router.post(
 
           isWinner = true
           selectedPrize = prize
+          offlineStockBefore = prize.remaining_quantity
           await PrizeService.deductStock(selectedPrize, 1, manager)
         } else {
           // 使用概率抽奖
@@ -407,10 +968,12 @@ router.post(
           if (selectedPrizeRecord && selectedPrizeRecord.remaining_quantity > 0) {
             isWinner = true
             selectedPrize = selectedPrizeRecord
+            offlineStockBefore = selectedPrizeRecord.remaining_quantity
             await PrizeService.deductStock(selectedPrize, 1, manager)
           } else {
             isWinner = false
             selectedPrize = null
+            offlineStockBefore = selectedPrizeRecord ? selectedPrizeRecord.remaining_quantity : null
           }
         }
 
@@ -427,6 +990,25 @@ router.post(
             operator_id: (req as any).user.id,
             ip_address: req.ip,
             user_agent: req.get('User-Agent'),
+          },
+          manager,
+        )
+
+        // 审计：线下抽奖库存前后与操作管理员（同一事务）
+        await AuditService.record(
+          {
+            activity_id: parseInt(activityId),
+            action: 'DRAW_OFFLINE',
+            lottery_code: lotteryCodeRecord.code,
+            prize_name: selectedPrize ? selectedPrize.name : null,
+            quantity_before: offlineStockBefore,
+            quantity_after: selectedPrize ? selectedPrize.remaining_quantity : offlineStockBefore,
+            actor_type: 'admin',
+            actor: (req as any).user.username,
+            user_id: (req as any).user.id,
+            ip_address: req.ip,
+            user_agent: req.get('User-Agent'),
+            detail: isWinner ? `线下抽奖中奖${prize_id ? '（指定奖品）' : ''}` : '线下抽奖未中奖',
           },
           manager,
         )
@@ -480,6 +1062,8 @@ router.post(
       .notEmpty()
       .withMessage('签字图片不能为空')
       .isString()
+      // MIME 白名单：签字板输出 PNG；拒绝任意 data:* 类型入库（曾接受任意 MIME）
+      .matches(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+$/)
       .withMessage('签字图片必须是base64字符串'),
   ],
   validateRequest,
@@ -514,15 +1098,12 @@ router.post(
         throw createError('VALIDATION_INVALID_FORMAT', '该记录不属于此活动')
       }
 
-      // 校验是线下抽奖记录（有operator_id）
-      if (!record.operator_id) {
-        throw createError('VALIDATION_INVALID_FORMAT', '仅线下抽奖记录支持签字')
-      }
+      // operator_id 有无仅区分抽奖通道（线下=管理员操作 / 线上=参与者自抽，含邮箱即抽），
+      // 不再作为能否签字的判据——补签入口对全部未签记录开放
+      // （原「仅线下抽奖记录支持签字」把邮箱即抽的线上中奖记录也拦在了补签之外）
 
-      // 校验已经签过字
-      if (record.signature_status === 'signed') {
-        throw createError('BUSINESS_SIGNATURE_EXISTS', '该记录已签字，不可重复签字')
-      }
+      // 已签也可重签（覆盖旧签名）——管理端记录页对已签记录提供「重签」入口；
+      // 撤销抽奖仍对已签记录禁止（签字是最终确认）
 
       // 规范为完整 data URL（前端可能传裸 base64 或 data URL）
       const dataUrl = image.startsWith('data:')

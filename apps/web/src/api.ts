@@ -25,11 +25,22 @@ import type {
   LotteryRecordListParams,
   Pagination,
   DrawLotteryResponse,
+  UndoDrawRequest,
+  UndoDrawResponse,
+  EmailDrawStatus,
   RegistrationStatus,
   MailConfig,
   UploadSignatureRequest,
   UploadSignatureResponse,
   ActivityWebhookInfo,
+  OpenActivitySummary,
+  ImportLotteryCodesRequest,
+  ImportLotteryCodesResponse,
+  BatchDeleteLotteryCodesRequest,
+  BatchDeleteLotteryCodesResponse,
+  UpdateParticipantInfoRequest,
+  AuditLog,
+  AuditListParams,
 } from './types/api'
 
 // API 基础配置
@@ -107,12 +118,23 @@ async function apiFetch<T>(
         )
       }
 
-      // 兼容两种后端错误格式：统一格式 error.message；
-      // 旧校验格式顶层 message（笼统）+ errors 数组（具体说明，优先取首条）
+      // 兼容两种后端错误格式：统一格式 error.message（笼统类别）+ error.details（具体原因）；
+      // 旧校验格式顶层 message + errors 数组。
+      // 展示优先级：details > message > errors[0] > 顶层 message——后端把可操作的
+      // 说明（如「该邮箱参与次数已达上限」）放在 details，笼统类别（「参数值超出范围」）
+      // 放在 message，取 details 才能让用户看到真正原因
       const firstFieldError = errorData.errors?.[0]?.msg || errorData.errors?.[0]?.message
+      const details = errorData.error?.details
+      const detailsText =
+        typeof details === 'string' && details.trim() !== ''
+          ? details
+          : Array.isArray(details)
+            ? details[0]?.msg || details[0]?.message || ''
+            : ''
       throw new ApiError(
         errorData.error?.code || 'UNKNOWN_ERROR',
-        errorData.error?.message ||
+        detailsText ||
+          errorData.error?.message ||
           firstFieldError ||
           errorData.message ||
           'Unknown error occurred',
@@ -217,6 +239,11 @@ export const authApi = {
 
 // 抽奖模块 API（公开接口）
 export const lotteryApi = {
+  // 公开的可参与活动列表（进行中 + 线上模式）
+  async listOpenActivities(): Promise<{ activities: OpenActivitySummary[] }> {
+    return apiFetch('/lottery/activities', {}, false)
+  },
+
   // 获取活动抽奖信息
   async getActivity(id: number): Promise<{ activity: Activity; prizes: Prize[] }> {
     return apiFetch(`/lottery/activities/${id}`, {}, false)
@@ -232,6 +259,65 @@ export const lotteryApi = {
       },
       false,
     )
+  },
+
+  // 撤销本次抽奖（签字完成前：恢复库存/码/删记录；测试码无副作用直返）
+  async undoDraw(id: number, data: UndoDrawRequest): Promise<UndoDrawResponse> {
+    return apiFetch(
+      `/lottery/activities/${id}/undo-draw`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      },
+      false,
+    )
+  },
+
+  // 邮箱即抽：提交前缀 → 发确认邮件（点击链接才执行抽奖）
+  async requestEmailDraw(
+    id: number,
+    email_prefix: string,
+  ): Promise<{ sent: boolean; email: string }> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/request`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email_prefix }),
+      },
+      false,
+    )
+  },
+
+  // 邮箱即抽确认链接执行（码即凭证，只发给本人邮箱）
+  async confirmEmailDraw(id: number, code: string): Promise<DrawLotteryResponse> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/confirm`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      },
+      false,
+    )
+  },
+
+  // 邮箱即抽状态（wait=true 为长轮询，服务端最长挂 20s）
+  async emailDrawStatus(id: number, email: string, wait = false): Promise<EmailDrawStatus> {
+    return apiFetch(
+      `/lottery/activities/${id}/email-draw/status?email=${encodeURIComponent(email)}${wait ? '&wait=1' : ''}`,
+      {},
+      false,
+    )
+  },
+}
+
+// 审计日志 API
+export const adminAuditApi = {
+  // 分页查询（普通管理员仅自己活动，超管全量）
+  async list(params: AuditListParams = {}): Promise<{ logs: AuditLog[]; pagination: Pagination }> {
+    const queryString = buildQueryParams(
+      params as unknown as Record<string, string | number | boolean | undefined>,
+    )
+    return apiFetch(`/admin/audit${queryString}`)
   },
 }
 
@@ -263,14 +349,6 @@ export const systemApi = {
     return apiFetch(`/system/users/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
-    })
-  },
-
-  // 更新用户状态
-  async updateUserStatus(id: number, status: 'active' | 'inactive'): Promise<{ user: User }> {
-    return apiFetch(`/system/users/${id}/status`, {
-      method: 'PUT',
-      body: JSON.stringify({ status }),
     })
   },
 
@@ -419,6 +497,40 @@ export const adminActivityApi = {
   async ensureDemoCode(id: number): Promise<{ lottery_code: { id: number; code: string } }> {
     return apiFetch(`/admin/activities/${id}/lottery-codes/demo`, {
       method: 'POST',
+    })
+  },
+
+  // 批量导入/覆盖抽奖码（CSV 已由前端解析为行数据）
+  async importLotteryCodes(
+    id: number,
+    data: ImportLotteryCodesRequest,
+  ): Promise<ImportLotteryCodesResponse> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/import`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 按 id 批量删除（允许已使用码——其抽奖记录被级联删除；测试码恒不删）
+  async batchDeleteLotteryCodes(
+    id: number,
+    data: BatchDeleteLotteryCodesRequest,
+  ): Promise<BatchDeleteLotteryCodesResponse> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/batch-delete`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 更新抽奖码参与者信息（码本身与状态不可改）
+  async updateLotteryCodeParticipantInfo(
+    id: number,
+    codeId: number,
+    data: UpdateParticipantInfoRequest,
+  ): Promise<{ lottery_code: LotteryCode }> {
+    return apiFetch(`/admin/activities/${id}/lottery-codes/${codeId}/participant-info`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
     })
   },
 
@@ -596,6 +708,7 @@ export const API = {
   auth: authApi,
   lottery: lotteryApi,
   system: systemApi,
+  adminAudit: adminAuditApi,
   adminActivity: adminActivityApi,
   adminPrize: adminPrizeApi,
   stats: statsApi,

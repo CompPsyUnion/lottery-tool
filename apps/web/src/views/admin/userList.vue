@@ -48,9 +48,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, h } from 'vue'
+import { ref, reactive, onMounted, computed, h } from 'vue'
 import { useRouter } from 'vue-router'
 import { systemApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 import type { User, UserListParams } from '@/types/api'
 import type { TableColumn } from '@/components/common/types'
 import PageTitle from '@/components/ui/text/pageTitle.vue'
@@ -66,6 +67,11 @@ import {
 
 // 路由实例
 const router = useRouter()
+const userStore = useUserStore()
+
+// 权限：用户管理写操作仅超管（后端已硬校验，前端同步隐藏入口防误操作）
+const isSuperAdmin = computed(() => userStore.role === 'super_admin')
+const currentUserId = computed(() => userStore.user?.id ?? null)
 
 // 响应式数据
 const loading = ref(false)
@@ -166,18 +172,34 @@ const columns: TableColumn[] = [
     width: '120px',
     render: (value: unknown, record: Record<string, unknown>) => {
       const user = record as unknown as User
+      // 权限：编辑仅超管或本人；启用/禁用（role/status 写）仅超管
+      const canEdit = isSuperAdmin.value || user.id === currentUserId.value
+      const canToggle = isSuperAdmin.value
+      const btnCls =
+        'inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8'
+      if (!canEdit && !canToggle) {
+        return '<span class="text-muted-foreground">-</span>'
+      }
       return `
         <div class="flex items-center gap-2">
-          <button onclick="handleEditUser('${user.id}')" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title="编辑用户">
+          ${
+            canEdit
+              ? `<button onclick="handleEditUser('${user.id}')" class="${btnCls}" title="编辑用户">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
-          </button>
-          <button onclick="handleStatusChange('${user.id}', '${user.status}')" class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8 ${user.status === 'active' ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}" title="${user.status === 'active' ? '禁用用户' : '启用用户'}">
+          </button>`
+              : ''
+          }
+          ${
+            canToggle
+              ? `<button onclick="handleStatusChange('${user.id}', '${user.status}')" class="${btnCls} ${user.status === 'active' ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}" title="${user.status === 'active' ? '禁用用户' : '启用用户'}">
             ${
               user.status === 'active'
                 ? '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"></path></svg>'
                 : '<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>'
             }
-          </button>
+          </button>`
+              : ''
+          }
         </div>
       `
     },
@@ -217,11 +239,11 @@ const handlePageChange = (page: number) => {
   fetchUsers()
 }
 
-// 处理状态变更
+// 处理状态变更（统一走 PUT /system/users/:id，后端仅超管放行）
 const handleStatusChange = async (userId: string, currentStatus: string) => {
   try {
     const newStatus = currentStatus === 'active' ? 'inactive' : 'active'
-    await systemApi.updateUserStatus(Number(userId), newStatus)
+    await systemApi.updateUser(Number(userId), { status: newStatus as 'active' | 'inactive' })
 
     // 更新本地数据
     const userIndex = users.value.findIndex((u) => u.id === Number(userId))

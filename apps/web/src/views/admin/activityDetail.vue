@@ -54,8 +54,12 @@
           </template>
           <span v-else class="text-xs text-muted-foreground self-center"> 活动已结束（终态） </span>
 
-          <!-- 抽奖入口（独立于流转：任意状态可用） -->
+          <!-- 编辑与抽奖入口（独立于流转：任意状态可用） -->
           <div class="flex gap-2 border-l pl-4 ml-2">
+            <Button variant="outline" @click="goEdit">
+              <SquarePen class="mr-1 h-4 w-4" />
+              编辑
+            </Button>
             <Button variant="outline" @click="showDemoDialog = true">
               <Play class="mr-1 h-4 w-4" />
               抽奖页面测试
@@ -71,89 +75,89 @@
 
     <!-- Webhook 接入卡（第三方表单 / 系统对接） -->
     <div v-if="webhookInfo" class="rounded-lg border p-4">
-      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div class="min-w-0 flex-1 space-y-4">
+      <div class="space-y-4">
+        <!-- 标题行：重新生成在右上角与标题同行，不单独占列 -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
           <div class="flex items-center gap-2">
             <span class="text-sm font-medium">Webhook 接入</span>
             <span class="text-xs text-muted-foreground">第三方表单 / 系统对接</span>
           </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            :disabled="regenerating"
+            @click="handleRegenerateToken"
+          >
+            {{ regenerating ? '生成中...' : '重新生成 Token' }}
+          </Button>
+        </div>
 
-          <!-- Token（默认掩码） -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">访问 Token</div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                {{ showToken ? webhookInfo.webhook_token : '••••••••••••••••••••••••' }}
-              </code>
-              <Button variant="outline" size="sm" class="shrink-0" @click="showToken = !showToken">
-                {{ showToken ? '隐藏' : '显示' }}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.webhook_token, 'Token 已复制')"
-              >
-                复制
-              </Button>
-            </div>
-          </div>
-
-          <!-- 批量接码端点 -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">
-              批量添加抽奖码端点（请求头 Authorization: Bearer &lt;Token&gt;）
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                POST {{ webhookInfo.webhook_url }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.webhook_url, '端点地址已复制')"
-              >
-                复制
-              </Button>
-            </div>
-          </div>
-
-          <!-- 金山表单端点（token 已内嵌，可直接粘贴） -->
-          <div class="space-y-1.5">
-            <div class="text-xs text-muted-foreground">
-              金山表单端点（token 已含在地址中，直接粘贴到表单 Webhook 配置即可）
-            </div>
-            <div class="flex flex-wrap items-center gap-2">
-              <code
-                class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-              >
-                {{ showToken ? webhookInfo.kdocs_url : maskedKdocsUrl }}
-              </code>
-              <Button
-                variant="outline"
-                size="sm"
-                class="shrink-0"
-                @click="copyText(webhookInfo.kdocs_url, '金山表单端点已复制')"
-              >
-                复制
-              </Button>
-            </div>
+        <!-- Token（默认掩码） -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">访问 Token</div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              {{ showToken ? webhookInfo.webhook_token : '••••••••••••••••••••••••' }}
+            </code>
+            <Button variant="outline" size="sm" class="shrink-0" @click="showToken = !showToken">
+              {{ showToken ? '隐藏' : '显示' }}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.webhook_token, 'Token 已复制')"
+            >
+              复制
+            </Button>
           </div>
         </div>
 
-        <Button
-          variant="destructive"
-          class="shrink-0"
-          :disabled="regenerating"
-          @click="handleRegenerateToken"
-        >
-          {{ regenerating ? '生成中...' : '重新生成 Token' }}
-        </Button>
+        <!-- 批量接码端点 -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">
+            批量添加抽奖码端点（请求头 Authorization: Bearer &lt;Token&gt;）
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              POST {{ webhookInfo.webhook_url }}
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.webhook_url, '端点地址已复制')"
+            >
+              复制
+            </Button>
+          </div>
+        </div>
+
+        <!-- 金山表单端点（token 已内嵌，可直接粘贴） -->
+        <div class="space-y-1.5">
+          <div class="text-xs text-muted-foreground">
+            金山表单端点（token 已含在地址中，直接粘贴到表单 Webhook 配置即可）
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <code
+              class="min-w-0 flex-1 basis-40 rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+            >
+              {{ showToken ? webhookInfo.kdocs_url : maskedKdocsUrl }}
+            </code>
+            <Button
+              variant="outline"
+              size="sm"
+              class="shrink-0"
+              @click="copyText(webhookInfo.kdocs_url, '金山表单端点已复制')"
+            >
+              复制
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -190,6 +194,9 @@
           </div>
         </div>
         <div class="flex gap-2">
+          <Button variant="outline" @click="router.push(`/admin/activities/codes/${activityId}`)">
+            管理抽奖码
+          </Button>
           <Button variant="outline" @click="router.push(`/admin/activities/prizes/${activityId}`)">
             管理奖品
           </Button>
@@ -259,7 +266,17 @@ import DataTable from '@/components/common/DataTable.vue'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Package, Gift, Search, Ticket, Eye, Play, ExternalLink, PenLine } from 'lucide-vue-next'
+import {
+  Package,
+  Gift,
+  Search,
+  Ticket,
+  Eye,
+  Play,
+  ExternalLink,
+  PenLine,
+  SquarePen,
+} from 'lucide-vue-next'
 import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
 import { API } from '@/api'
@@ -323,6 +340,15 @@ const columns: TableColumn[] = [
     render: (value: unknown) => (value as string) || '-',
   },
   {
+    key: 'email',
+    title: '邮箱',
+    width: '180px',
+    render: (value: unknown) =>
+      value
+        ? `<span class="text-xs break-all">${value}</span>`
+        : '<span class="text-muted-foreground">-</span>',
+  },
+  {
     key: 'is_winner',
     title: '中奖状态',
     width: '100px',
@@ -368,36 +394,38 @@ const columns: TableColumn[] = [
     render: (_value: unknown, row: unknown) => {
       const record = row as LotteryRecord
       const isSigned = record.signature_status === 'signed'
+      const btnCls = 'inline-flex items-center gap-1 text-sm font-medium transition-colors'
       if (isSigned) {
-        return h(
-          'button',
-          {
-            class:
-              'inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium',
-            onClick: () => openSignaturePreview(record),
-          },
-          [h(Eye, { class: 'w-4 h-4' }), '已签'],
-        )
+        // 已签：预览旧签名 + 重签（覆盖）
+        return h('div', { class: 'flex items-center justify-center gap-2' }, [
+          h(
+            'button',
+            {
+              class: `${btnCls} text-blue-600 hover:text-blue-800`,
+              title: '预览签名',
+              onClick: () => openSignaturePreview(record),
+            },
+            [h(Eye, { class: 'w-4 h-4' }), '已签'],
+          ),
+          h(
+            'button',
+            {
+              class: `${btnCls} text-amber-600 hover:text-amber-800`,
+              title: '重新签字（覆盖现有签名）',
+              onClick: () => openResign(record),
+            },
+            [h(PenLine, { class: 'w-4 h-4' }), '重签'],
+          ),
+        ])
       }
-      // 未签：线下活动的记录提供补签入口（真实/测试记录均可）
-      if (activity.value?.lottery_mode === 'offline') {
-        return h(
-          'button',
-          {
-            class:
-              'inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm font-medium',
-            onClick: () => openResign(record),
-          },
-          [h(PenLine, { class: 'w-4 h-4' }), '补签'],
-        )
-      }
+      // 未签：补签（线下/线上记录均可——邮箱即抽的中奖记录同样可补签）
       return h(
-        'span',
+        'button',
         {
-          class:
-            'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500',
+          class: `${btnCls} text-blue-600 hover:text-blue-800`,
+          onClick: () => openResign(record),
         },
-        '未签',
+        [h(PenLine, { class: 'w-4 h-4' }), '补签'],
       )
     },
   },
@@ -454,7 +482,10 @@ const handleTransition = async (target: 'draft' | 'ready' | 'active' | 'ended') 
   }
 }
 
-// ---- 抽奖入口 ----
+// ---- 编辑与抽奖入口 ----
+const goEdit = () => {
+  router.push(`/admin/activities/edit/${activityId}`)
+}
 const showDemoDialog = ref(false)
 const openLotteryPage = () => {
   window.open(`${location.origin}/lottery?activityId=${activityId}`, '_blank')
@@ -579,14 +610,17 @@ const openSignaturePreview = async (record: LotteryRecord) => {
   }
 }
 
-// ---- 补签（未签字的线下记录） ----
+// ---- 补签/重签（未签=补签；已签=重签覆盖旧签名） ----
 const showResignDialog = ref(false)
 const isSubmittingResign = ref(false)
 const resignError = ref('')
 const resignRecordId = ref<number | null>(null)
+/** 重签模式（已签记录覆盖）——影响成功文案 */
+const isResignOverwrite = ref(false)
 
 const openResign = (record: LotteryRecord) => {
   resignRecordId.value = record.id
+  isResignOverwrite.value = record.signature_status === 'signed'
   resignError.value = ''
   showResignDialog.value = true
 }
@@ -599,7 +633,7 @@ const handleResignConfirm = async (dataUrl: string) => {
     await API.adminActivity.uploadSignature(activityId, resignRecordId.value, {
       image: dataUrl,
     })
-    toast.success('补签成功')
+    toast.success(isResignOverwrite.value ? '重签成功（原签名已覆盖）' : '补签成功')
     showResignDialog.value = false
     resignRecordId.value = null
     await fetchLotteryRecords()

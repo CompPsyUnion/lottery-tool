@@ -168,6 +168,14 @@ router.post(
         })
       }
 
+      // 创建用户 = 写他人账户：与更新/删除一致，仅超级管理员可操作
+      if ((req as any).user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: '创建用户仅超级管理员可操作',
+        })
+      }
+
       const { username, email, password } = req.body
 
       // 检查用户名和邮箱是否已存在
@@ -186,7 +194,7 @@ router.post(
       const user = await AppDataSource.getRepository(User).save({
         username,
         email,
-        password_hash: await bcrypt.hash(password, 10),
+        password_hash: await bcrypt.hash(password, 12),
         role: 'admin',
         status: 'active',
       })
@@ -245,6 +253,28 @@ router.put(
 
       const { id } = req.params
       const { username, email, role, status } = req.body
+      const requester = (req as any).user
+      const isSuperAdmin = requester.role === 'super_admin'
+      const isSelf = requester.id === parseInt(id)
+
+      // 权限收紧（防权限提升）：
+      // - role/status 字段任何目标（含自己）仅超级管理员可写
+      // - 他人目标的任何修改仅超级管理员（普通管理员对他人只读）
+      // - 自己目标仅可改 username/email（密码走 /auth/password）
+      if (!isSuperAdmin) {
+        if (role !== undefined || status !== undefined) {
+          return res.status(403).json({
+            success: false,
+            message: '角色与状态修改仅超级管理员可操作',
+          })
+        }
+        if (!isSelf) {
+          return res.status(403).json({
+            success: false,
+            message: '普通管理员无权修改其他用户',
+          })
+        }
+      }
 
       const user = await UserService.findById(parseInt(id))
       if (!user) {
@@ -255,7 +285,7 @@ router.put(
       }
 
       // 检查是否修改超级管理员
-      if (user.role === 'super_admin' && (req as any).user.role !== 'super_admin') {
+      if (user.role === 'super_admin' && !isSuperAdmin) {
         return res.status(403).json({
           success: false,
           message: '无权修改超级管理员信息',
@@ -328,6 +358,16 @@ router.put(
 
       const { id } = req.params
       const { new_password } = req.body
+      const requester = (req as any).user
+
+      // 重置他人密码 = 账户接管面：仅超级管理员可操作（普通管理员改自己密码走
+      // PUT /auth/password，需验证旧密码）
+      if (requester.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: '重置用户密码仅超级管理员可操作；修改自己的密码请使用修改密码功能',
+        })
+      }
 
       const user = await UserService.findById(parseInt(id))
       if (!user) {
@@ -337,16 +377,8 @@ router.put(
         })
       }
 
-      // 检查是否修改超级管理员
-      if (user.role === 'super_admin' && (req as any).user.role !== 'super_admin') {
-        return res.status(403).json({
-          success: false,
-          message: '无权修改超级管理员密码',
-        })
-      }
-
-      // 更新密码
-      user.password_hash = await bcrypt.hash(new_password, 10)
+      // 更新密码（cost 与注册/自助修改统一为 12）
+      user.password_hash = await bcrypt.hash(new_password, 12)
       await AppDataSource.getRepository(User).save(user)
 
       // 记录操作日志
@@ -386,6 +418,14 @@ router.delete(
       }
 
       const { id } = req.params
+
+      // 删除他人 = 拒绝服务面：仅超级管理员可删除用户（下方另禁删超管与自己）
+      if ((req as any).user.role !== 'super_admin') {
+        return res.status(403).json({
+          success: false,
+          message: '删除用户仅超级管理员可操作',
+        })
+      }
 
       const user = await UserService.findById(parseInt(id))
       if (!user) {
@@ -536,10 +576,10 @@ router.get(
   },
 )
 
-// 清空操作日志
+// 清空操作日志（审计轨迹，仅超级管理员）
 router.delete(
   '/logs',
-  [query('before_date').optional().isISO8601().withMessage('日期格式不正确')],
+  [requireSuperAdmin, query('before_date').optional().isISO8601().withMessage('日期格式不正确')],
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const errors = validationResult(req)
