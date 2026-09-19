@@ -290,7 +290,8 @@ const onSave = form.handleSubmit(async (values): Promise<boolean> => {
     return false
   } catch (error) {
     console.error('保存用户失败:', error)
-    toast.error(isEditMode.value ? '更新用户失败' : '创建用户失败')
+    const detail = error instanceof Error && error.message ? error.message : ''
+    toast.error(detail || (isEditMode.value ? '更新用户失败' : '创建用户失败'))
     return false
   } finally {
     isSubmitting.value = false

@@ -697,7 +697,9 @@ const onSave = form.handleSubmit(async (values): Promise<boolean> => {
     return false
   } catch (error) {
     console.error('保存活动失败:', error)
-    toast.error(isEditMode.value ? '更新活动失败' : '创建活动失败')
+    // 后端校验细节（如"开始时间必须早于结束时间"）须经 toast 透出，否则表现为"改不动"且无提示
+    const detail = error instanceof Error && error.message ? error.message : ''
+    toast.error(detail || (isEditMode.value ? '更新活动失败' : '创建活动失败'))
     return false
   } finally {
     isSubmitting.value = false
