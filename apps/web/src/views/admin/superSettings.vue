@@ -223,6 +223,8 @@ const saveMail = async (): Promise<boolean> => {
       codeTtlMinutes: Number(mail.value.codeTtlMinutes) || 10,
       codeSubject: mail.value.codeSubject,
     })
+    // 表单同步为实际持久化的值（非法输入回落 10），避免快照记录未生效的形态
+    mail.value.codeTtlMinutes = Number(mail.value.codeTtlMinutes) || 10
     mail.value.postAuthToken = ''
     toast.success('邮件配置已保存')
     mailSnapshot.value = serializeMail()

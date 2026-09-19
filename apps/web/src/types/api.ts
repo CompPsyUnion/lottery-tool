@@ -224,16 +224,18 @@ export interface CreateActivityRequest {
   name: string
   description?: string
   lottery_mode: 'offline' | 'online'
-  start_time?: string
-  end_time?: string
+  /** UTC ISO（带 Z）；null = 不设置/清除（undefined = 更新时跳过该字段） */
+  start_time?: string | null
+  end_time?: string | null
   settings?: ActivitySettings
 }
 
 export interface UpdateActivityRequest {
   name?: string
   description?: string
-  start_time?: string
-  end_time?: string
+  /** UTC ISO（带 Z）；null = 清除，undefined = 跳过不改 */
+  start_time?: string | null
+  end_time?: string | null
   /** 键级合并：仅覆盖出现的键，未出现的保留库中现值 */
   settings?: Partial<ActivitySettings>
 }

@@ -247,9 +247,9 @@ router.post(
 
     body('lottery_mode').isIn(['offline', 'online']).withMessage('抽奖模式只能是offline或online'),
 
-    body('start_time').optional().isISO8601().withMessage('开始时间格式错误'),
+    body('start_time').optional({ values: 'null' }).isISO8601().withMessage('开始时间格式错误'),
 
-    body('end_time').optional().isISO8601().withMessage('结束时间格式错误'),
+    body('end_time').optional({ values: 'null' }).isISO8601().withMessage('结束时间格式错误'),
 
     ...activitySettingsValidators,
   ],
@@ -335,9 +335,9 @@ router.put(
       .isLength({ max: 1000 })
       .withMessage('活动描述不能超过1000个字符'),
 
-    body('start_time').optional().isISO8601().withMessage('开始时间格式错误'),
+    body('start_time').optional({ values: 'null' }).isISO8601().withMessage('开始时间格式错误'),
 
-    body('end_time').optional().isISO8601().withMessage('结束时间格式错误'),
+    body('end_time').optional({ values: 'null' }).isISO8601().withMessage('结束时间格式错误'),
 
     ...activitySettingsValidators,
   ],

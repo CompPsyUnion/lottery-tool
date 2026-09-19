@@ -425,7 +425,6 @@ import * as z from 'zod'
 import { toast } from 'vue-sonner'
 
 import PageTitle from '@/components/ui/text/pageTitle.vue'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
   FormControl,
@@ -469,7 +468,8 @@ const formSchema = toTypedSchema(
       end_time: z.string().optional(),
       settings: z
         .object({
-          max_lottery_codes: z.number().min(1, '最大抽奖码数量必须大于0').optional(),
+          // coerce：number 输入框回填的是字符串，不转换则 zod 类型报错、保存被静默拦截
+          max_lottery_codes: z.coerce.number().min(1, '最大抽奖码数量必须大于0').optional(),
           lottery_code_format: z
             .enum([
               '4_digit_number',
@@ -641,13 +641,18 @@ const onSave = form.handleSubmit(async (values): Promise<boolean> => {
   try {
     // 处理表单数据
     // 金山字段映射始终整对象提交（空串 = 显式使用默认 qid；后端 PUT 为键级合并不丢配置）
+    // datetime-local 是浏览器本地时区的裸串（无 Z/偏移），直接提交会被服务器按其
+    // 自身时区（容器默认 UTC）解析——UTC+8 用户保存后回显偏移 8 小时。
+    // 须先转成绝对时刻（带 Z 的 UTC ISO）；清空 = null（显式清除，undefined 会被后端跳过）
+    const toUtcIso = (local?: string): string | null =>
+      local ? new Date(local).toISOString() : null
     const fieldMap = values.settings?.kdocs_field_map
     const formData: CreateActivityRequest | UpdateActivityRequest = {
       name: values.name,
-      description: values.description || undefined,
+      description: values.description,
       lottery_mode: values.lottery_mode as 'offline' | 'online',
-      start_time: values.start_time || undefined,
-      end_time: values.end_time || undefined,
+      start_time: toUtcIso(values.start_time),
+      end_time: toUtcIso(values.end_time),
       settings: {
         max_lottery_codes: values.settings?.max_lottery_codes || undefined,
         lottery_code_format: values.settings?.lottery_code_format || undefined,
@@ -678,8 +683,10 @@ const onSave = form.handleSubmit(async (values): Promise<boolean> => {
         originalStatus.value = selectedStatus.value
       }
       toast.success('活动更新成功')
-      // 保存条模式：留在本页继续编辑，快照前移
-      originalSnapshot.value = serializeForm(form.values)
+      // 保存条模式：留在本页继续编辑。以服务端为准回读并重建快照——
+      // 日期 UTC 规范化、邮箱后缀补 @、默认值回填等都以库中真实值为准，
+      // 避免快照记录"以为存了"的形态导致刷新后 phantom dirty / 值回跳
+      await loadActivity()
       return true
     }
 
