@@ -4,7 +4,7 @@
    （其类走 shadcn 语义 token，自动套用本站主题色） */
 @source '../node_modules/vue-guarded-save/dist';
 /* 动态拼接的折叠态 inset 类（模板表达式内字符串扫描不稳定），显式内联确保生成 */
-@source inline('group-has-[[data-collapsible=icon]]/sidebar-wrapper:lg:left-[3.5rem]');
+@source inline('group-has-[[data-collapsible=icon]]/sidebar-wrapper:md:left-[3.5rem]');
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));

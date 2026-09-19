@@ -48,7 +48,7 @@ const mergedLabels = computed(() => ({ ...defaultLabels, ...(props.labels || {})
     :sidebar-inset="sidebarInset ?? true"
     :inset-class="
       insetClass ??
-      'lg:left-64 group-has-[[data-collapsible=icon]]/sidebar-wrapper:lg:left-[3.5rem]'
+      'md:left-64 group-has-[[data-collapsible=icon]]/sidebar-wrapper:md:left-[3.5rem]'
     "
     :bar-class="barClass"
     :save-class="saveClass"
