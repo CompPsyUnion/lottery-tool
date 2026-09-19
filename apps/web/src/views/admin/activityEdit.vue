@@ -493,9 +493,12 @@ const formSchema = toTypedSchema(
           email_draw: z
             .object({
               enabled: z.boolean().optional(),
+              // '' = 未配置（未开启邮箱即抽的常态）；optional() 只放行 undefined，
+              // 若不放行 ''，任何无关字段保存都会被该 regex 静默拦下（字段未渲染时无提示）
               domain_suffix: z
                 .string()
                 .regex(/^@?[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/, '邮箱后缀格式不正确（如 @unnc.edu.cn）')
+                .or(z.literal(''))
                 .optional(),
               max_per_email: z.coerce.number().min(1, '至少 1 次').max(10, '最多 10 次').optional(),
               show_result_on_click: z.boolean().optional(),
@@ -609,6 +612,8 @@ const loadActivity = async () => {
   } catch (error) {
     console.error('加载活动数据失败:', error)
     toast.error('加载活动数据失败')
+    // 加载失败也要建立快照：否则快照恒为空串 → 编辑页一打开就 phantom dirty（保存条常驻）
+    originalSnapshot.value = serializeForm(form.values)
   }
 }
 

@@ -5,6 +5,7 @@
  * 由项目 index.css 的 @source 扫描生成、自动套用本站主题色。
  */
 import { computed } from 'vue'
+import { toast } from 'vue-sonner'
 import { GuardedSave } from 'vue-guarded-save'
 
 const props = defineProps<{
@@ -22,6 +23,20 @@ const props = defineProps<{
   unloadGuard?: boolean
   saveShortcut?: boolean
 }>()
+
+/**
+ * 包的保存回调若 resolve undefined 会被当作成功闪 ✓（源码 `!== false` 判断），
+ * 而 vee-validate handleSubmit 校验失败恰恰 resolve undefined——表现为"点了保存
+ * 毫无反应/假闪成功"。这里统一拦截：undefined = 校验未过，明确提示且不闪 ✓。
+ */
+const guardedOnSave = async (): Promise<boolean> => {
+  const result = await props.onSave()
+  if (result === undefined) {
+    toast.error('部分字段未通过校验，请检查表单项')
+    return false
+  }
+  return result
+}
 
 const defaultLabels = {
   save: '保存',
@@ -42,7 +57,7 @@ const mergedLabels = computed(() => ({ ...defaultLabels, ...(props.labels || {})
 <template>
   <GuardedSave
     :dirty="dirty"
-    :on-save="onSave"
+    :on-save="guardedOnSave"
     :on-discard="onDiscard"
     :labels="mergedLabels"
     :sidebar-inset="sidebarInset ?? true"
