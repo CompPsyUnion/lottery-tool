@@ -30,9 +30,11 @@ export interface EmailDrawSettings {
   show_result_on_click?: boolean
 }
 
-/** 邮箱即抽状态（提交页长轮询；drawn 附结果摘要，不含抽奖码） */
+/** 邮箱即抽状态（提交页长轮询；drawn 附结果摘要与记录 id，不含抽奖码） */
 export interface EmailDrawStatus {
   state: 'none' | 'pending' | 'drawn'
+  /** drawn 时本次结果记录 id（大屏凭它与 request_token 撤销） */
+  record_id?: number | null
   result?: {
     is_winner: boolean
     prize: { name: string; description?: string | null } | null
@@ -425,7 +427,9 @@ export interface DrawLotteryResponse {
 /** 撤销本次抽奖（签字完成前）：中奖恢复库存、码置回未使用、删除本次记录 */
 export interface UndoDrawRequest {
   record_id: number
-  lottery_code: string
+  /** 归属凭证二选一：抽奖码（点击设备）或邮箱即抽的请求凭证（提交页/大屏） */
+  lottery_code?: string
+  request_token?: string
 }
 
 export interface UndoDrawResponse {

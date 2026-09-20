@@ -277,7 +277,7 @@ export const lotteryApi = {
   async requestEmailDraw(
     id: number,
     email_prefix: string,
-  ): Promise<{ sent: boolean; email: string }> {
+  ): Promise<{ sent: boolean; email: string; request_token: string }> {
     return apiFetch(
       `/lottery/activities/${id}/email-draw/request`,
       {

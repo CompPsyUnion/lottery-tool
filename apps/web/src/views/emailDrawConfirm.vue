@@ -1,5 +1,8 @@
 <template>
   <div class="min-h-screen bg-white flex items-center justify-center p-4">
+    <!-- 品牌位（与管理端同款，左上角） -->
+    <BrandBadge />
+
     <!-- 已撤销：码已恢复可用，可重新点击邮件链接参与 -->
     <div v-if="undone" class="w-full max-w-md">
       <div class="rounded-xl border border-amber-100 bg-amber-50 p-6 text-center space-y-3">
@@ -110,6 +113,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { toast, Toaster } from 'vue-sonner'
 import { lotteryApi, authApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import BrandBadge from '@/components/common/BrandBadge.vue'
 import type { Prize } from '@/types/api'
 
 const route = useRoute()

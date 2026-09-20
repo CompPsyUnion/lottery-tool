@@ -57,6 +57,14 @@ export class LotteryCode {
   @Column({ name: 'participant_info', type: 'jsonb', nullable: true })
   participant_info!: ParticipantInfo | null
 
+  /**
+   * 邮箱即抽的提交方凭证（CSPRNG hex）：发给提交页（大屏）随请求返回、不落邮件。
+   * 撤销时可作为记录归属的替代凭证（邮箱可被他人枚举，抽奖码只发本人邮箱——
+   * 提交页没有码，凭本 token 撤销自己发起的那次请求）。普通码为 null。
+   */
+  @Column({ name: 'request_token', type: 'varchar', length: 64, nullable: true })
+  request_token!: string | null
+
   @Column({ name: 'used_at', type: 'timestamp', nullable: true })
   used_at!: Date | null
 

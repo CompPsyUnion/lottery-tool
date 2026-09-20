@@ -1,5 +1,8 @@
 <template>
   <div class="min-h-screen bg-white flex items-center justify-center p-4">
+    <!-- 品牌位（与管理端同款，左上角） -->
+    <BrandBadge />
+
     <!-- 加载状态 -->
     <div v-if="loading" class="text-gray-800 text-center">
       <div
@@ -321,10 +324,10 @@
          模态开启时 reka-ui 给 body 加 pointer-events:none（点击锁定），Teleport 到
          body 的按钮必须自带 pointer-events-auto 才可点；z-60 高于遮罩/内容（z-50）。
          低对比小字常态近乎隐形，hover 显形。撤销仅中奖签字前可用；
-         轮询来源的结果本机无抽奖码，撤销仅在邮件链接打开的设备可用 -->
+         直接抽奖凭抽奖码，邮箱即抽轮询结果凭 request_token（大屏可撤销） -->
     <Teleport to="body">
       <button
-        v-if="showResult && !resultFromPoll"
+        v-if="showResult && (!resultFromPoll || canUndoPolled)"
         class="pointer-events-auto fixed bottom-3 left-4 z-60 text-[11px] text-gray-400/40 hover:text-red-500 opacity-30 hover:opacity-100 transition-all duration-200 select-none"
         title="撤销本次抽奖（恢复库存/抽奖码，删除本次记录）"
         @click="showUndoConfirm = true"
@@ -353,6 +356,7 @@ import { toast, Toaster } from 'vue-sonner'
 import { lotteryApi, adminActivityApi } from '@/api'
 import type { Activity, Prize, LotteryRecord } from '@/types/api'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
+import BrandBadge from '@/components/common/BrandBadge.vue'
 
 const urlParams = new URLSearchParams(window.location.search)
 const activityId = Number(urlParams.get('activityId'))
@@ -406,7 +410,13 @@ const emailDrawWaiting = ref(false)
 const emailDrawEmail = ref('')
 const emailPolling = ref(false)
 let emailPollStopped = true
-/** 结果来自提交页长轮询（本机无抽奖码，撤销仅在邮件链接打开的设备上可用） */
+/** 邮箱即抽提交方凭证（随 request 响应下发，不进邮件）：大屏撤销本次参与用 */
+const edrawRequestToken = ref('')
+/** 轮询得知的结果记录 id（与 edrawRequestToken 配对构成大屏撤销凭证） */
+const polledRecordId = ref<number | null>(null)
+/** 轮询结果可撤销：记录 id + 请求凭证齐备（提交页发起且未被撤销过） */
+const canUndoPolled = computed(() => !!polledRecordId.value && !!edrawRequestToken.value)
+/** 结果来自提交页长轮询（本机无抽奖码；持有请求凭证时可撤销） */
 const resultFromPoll = ref(false)
 /** 旧版邮件链接 ?edraw=code 的兼容入口（新邮件已指向 /edraw/:activityId 子页）；
  *  仍自动以公开 draw 执行（无视 offline 登录门槛） */
@@ -653,7 +663,10 @@ const keepResult = () => {
 
 // 确认撤销本次抽奖：恢复库存/码/删记录；抽奖码回填便于重试
 const handleUndoConfirm = async () => {
-  if (!currentRecordId.value || !lastDrawnCode.value) {
+  // 凭证二选一：直接抽奖有抽奖码；轮询结果（邮箱即抽大屏）用请求凭证
+  const recordId = currentRecordId.value ?? polledRecordId.value
+  const useToken = !lastDrawnCode.value
+  if (!recordId || (!lastDrawnCode.value && !edrawRequestToken.value)) {
     // 无记录可撤销（理论上不可达）：按关闭处理
     showUndoConfirm.value = false
     closeResult()
@@ -662,17 +675,21 @@ const handleUndoConfirm = async () => {
 
   undoing.value = true
   try {
-    await lotteryApi.undoDraw(activityId, {
-      record_id: currentRecordId.value,
-      lottery_code: lastDrawnCode.value,
-    })
+    await lotteryApi.undoDraw(
+      activityId,
+      useToken
+        ? { record_id: recordId, request_token: edrawRequestToken.value }
+        : { record_id: recordId, lottery_code: lastDrawnCode.value },
+    )
 
     showUndoConfirm.value = false
     showSignature.value = false
     closeResult()
     currentRecordId.value = null
-    // 回填本次抽奖码（线上模式还需补参与者信息），便于修正后重新参与
-    lotteryCode.value = lastDrawnCode.value
+    polledRecordId.value = null
+    // 回填本次抽奖码（线上模式还需补参与者信息），便于修正后重新参与；
+    // 轮询来源本机无码（邮箱即抽），回邮箱输入态重新提交
+    if (lastDrawnCode.value) lotteryCode.value = lastDrawnCode.value
     toast.success('已撤销本次抽奖，抽奖码恢复可用')
   } catch (err) {
     let errorMessage = '撤销失败，请重试'
@@ -698,6 +715,8 @@ const handleRequestEmailDraw = async () => {
     isDrawing.value = true
     const res = await lotteryApi.requestEmailDraw(activityId, prefix)
     emailDrawEmail.value = res.email
+    // 提交方凭证：随请求下发（不进邮件），撤销本次邮箱即抽时作为归属凭证
+    edrawRequestToken.value = res.request_token || ''
     emailDrawWaiting.value = true
     toast.success(`确认邮件已发送至 ${res.email}`)
     startEmailPolling(res.email)
@@ -718,8 +737,9 @@ const startEmailPolling = async (email: string) => {
       if (emailPollStopped) return
       if (status.state === 'drawn' && status.result) {
         emailDrawWaiting.value = false
-        // 复用结果弹窗（本机无抽奖码：不显示撤销、关闭不需确认）
+        // 复用结果弹窗；本机无抽奖码，但持有请求凭证（request_token）时可撤销
         resultFromPoll.value = true
+        polledRecordId.value = status.record_id ?? null
         lotteryResult.value = {
           is_winner: status.result.is_winner,
           prize: (status.result.prize as unknown as Prize) ?? null,

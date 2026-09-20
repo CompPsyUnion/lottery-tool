@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { body, validationResult } from 'express-validator'
+import { timingSafeEqual, randomBytes } from 'node:crypto'
 import { authenticateToken, requireAdmin, optionalAuth } from '../middleware/auth'
 import { logLotteryDraw } from '../middleware/operation-logger'
 import { createError } from '../utils/custom-error'
@@ -358,7 +359,9 @@ router.post(
   '/activities/:id/undo-draw',
   [
     body('record_id').isInt({ min: 1 }).withMessage('记录ID必须是正整数'),
-    body('lottery_code').notEmpty().withMessage('抽奖码不能为空'),
+    // 凭证二选一：lottery_code（点击设备）或 request_token（邮箱即抽提交页/大屏）
+    body('lottery_code').optional().notEmpty().withMessage('抽奖码不能为空'),
+    body('request_token').optional().notEmpty().withMessage('请求凭证不能为空'),
   ],
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -372,7 +375,7 @@ router.post(
       }
 
       const activityId = parseInt(req.params.id)
-      const { record_id, lottery_code: lotteryCode } = req.body
+      const { record_id, lottery_code: lotteryCode, request_token: requestToken } = req.body
 
       const record = await AppDataSource.getRepository(LotteryRecord).findOne({
         where: { id: record_id },
@@ -382,9 +385,23 @@ router.post(
         throw createError('BUSINESS_LOTTERY_RECORD_NOT_FOUND', '抽奖记录不存在')
       }
 
-      // 归属凭证：撤销者必须持有本次抽奖码（与抽奖入口同信任级）
-      if (!record.lotteryCode || record.lotteryCode.code !== lotteryCode.trim()) {
-        throw createError('AUTH_INSUFFICIENT_PERMISSION', '抽奖码与本次记录不匹配')
+      // 归属凭证（与各抽奖入口同信任级）：
+      //   ① lottery_code——点击设备持有（码只发本人邮箱）；
+      //   ② request_token——邮箱即抽提交页持有（邮箱可被枚举，token 只随请求响应下发）。
+      // 两者其一匹配即可；恒时比较防时序侧信道。
+      const codeMatched =
+        !!lotteryCode &&
+        !!record.lotteryCode &&
+        safeStrEqual(record.lotteryCode.code, String(lotteryCode).trim())
+      const tokenMatched =
+        !!requestToken &&
+        !!record.lotteryCode?.request_token &&
+        safeStrEqual(record.lotteryCode.request_token, String(requestToken))
+      if (!codeMatched && !tokenMatched) {
+        throw createError(
+          'AUTH_INSUFFICIENT_PERMISSION',
+          '凭证与本次记录不匹配（需抽奖码或本次提交凭证）',
+        )
       }
 
       // 测试码抽奖：无库存/状态副作用，直接成功（测试码与测试记录保留复用）
@@ -439,7 +456,7 @@ router.post(
       await writeOperationLog({
         user_id: record.operator_id ?? null,
         operation_type: 'UNDO_LOTTERY_DRAW',
-        operation_detail: `撤销抽奖：${lotteryCode}${record.is_winner && record.prize ? `（恢复库存：${record.prize.name}）` : ''}`,
+        operation_detail: `撤销抽奖：${record.lotteryCode!.code}${record.is_winner && record.prize ? `（恢复库存：${record.prize.name}）` : ''}`,
         target_type: 'ACTIVITY',
         target_id: activityId,
         ip_address: req.ip,
@@ -463,6 +480,13 @@ router.post(
 
 // 前缀合法字符（本地部分子集）：字母/数字/点/下划线/连字符
 const EMAIL_PREFIX_RE = /^[A-Za-z0-9._-]{1,64}$/
+
+/** 恒时字符串比较（长度不同直接 false，不泄露逐字节信息） */
+const safeStrEqual = (a: string, b: string): boolean => {
+  const ba = Buffer.from(a)
+  const bb = Buffer.from(b)
+  return ba.length === bb.length && timingSafeEqual(ba, bb)
+}
 
 interface EmailDrawSettings {
   enabled?: boolean
@@ -553,6 +577,10 @@ router.post(
 
       let lotteryCode = codes.find((c) => c.status === 'unused')
 
+      // 提交方凭证（CSPRNG）：只随本次响应发给提交页（大屏），不进邮件——
+      // 邮箱可被他人枚举，提交页凭它撤销自己发起的这次请求（重发即轮换，旧 token 失效）
+      const requestToken = randomBytes(24).toString('hex')
+
       if (!lotteryCode) {
         // 生成新码（占用活动码配额；撞码重试）
         const settings = (activity.settings as Record<string, unknown>) || {}
@@ -574,6 +602,7 @@ router.post(
               code: candidate,
               participant_info: { email },
               status: 'unused',
+              request_token: requestToken,
             })
             break
           }
@@ -581,6 +610,11 @@ router.post(
         if (!lotteryCode) {
           throw createError('SYSTEM_INTERNAL_ERROR', '生成抽奖码失败，请重试')
         }
+      } else {
+        // 重发复用现有待用码：轮换提交方凭证（撤销权归最新提交者）
+        await AppDataSource.getRepository(LotteryCode).update(lotteryCode.id, {
+          request_token: requestToken,
+        })
       }
 
       // 确认邮件（点击链接 → /lottery?activityId=&edraw=code → 前端用公开 draw 端点执行抽奖）
@@ -628,7 +662,7 @@ router.post(
 
       res.status(200).json({
         success: true,
-        data: { sent: true, email },
+        data: { sent: true, email, request_token: requestToken },
         message: `确认邮件已发送至 ${email}，请在邮箱中点击链接完成抽奖`,
       })
     } catch (error) {
@@ -673,6 +707,8 @@ router.get('/activities/:id/email-draw/status', async (req, res, next) => {
           success: true,
           data: {
             state: 'drawn',
+            // record_id 供提交页（大屏）撤销；仍不含抽奖码（只发本人邮箱）
+            record_id: record ? record.id : null,
             result: record
               ? {
                   is_winner: record.is_winner,
