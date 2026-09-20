@@ -20,6 +20,15 @@ const limiterPromise: Promise<{
   checkTarget: (flow: string, email: string) => LimitResult
 }> = import('email-poster').then((m) => m.createEmailLimiter())
 
+/**
+ * 邮箱即抽单独限频实例：去除每分钟限制（活动现场同邮箱连发重试常见），
+ * 仅保留每日上限（默认 10 封）防邮件轰炸。per-minute 提到 60 ≈ 每秒 1 封，
+ * 对人工操作等于无感限制。注册验证码（code）与测试邮件仍走上面 1/min 实例。
+ */
+const emailDrawLimiterPromise: Promise<{
+  checkTarget: (flow: string, email: string) => LimitResult
+}> = import('email-poster').then((m) => m.createEmailLimiter({ targetPerMinute: 60 }))
+
 function limitMessage(r: LimitResult): string {
   if (r.reason === 'minute' && r.retryInSeconds) {
     return `发送过于频繁，请 ${Math.ceil(r.retryInSeconds / 60)} 分钟后再试`
@@ -35,11 +44,11 @@ export async function checkCodeSendLimit(
   return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
 }
 
-/** 邮箱即抽确认邮件的发送频控（独立 flow：同邮箱 1/min、10/day） */
+/** 邮箱即抽确认邮件的发送频控（独立实例：无每分钟限制，仅每日上限） */
 export async function checkEmailDrawSendLimit(
   email: string,
 ): Promise<{ allowed: boolean; message?: string }> {
-  const limiter = await limiterPromise
+  const limiter = await emailDrawLimiterPromise
   const r = limiter.checkTarget('emaildraw', email)
   return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
 }
