@@ -737,6 +737,8 @@ const startEmailPolling = async (email: string) => {
       if (emailPollStopped) return
       if (status.state === 'drawn' && status.result) {
         emailDrawWaiting.value = false
+        // 本次邮箱即抽已完成：清空邮箱输入，避免下一位参与者沿用上一位的地址
+        emailPrefix.value = ''
         // 复用结果弹窗；本机无抽奖码，但持有请求凭证（request_token）时可撤销
         resultFromPoll.value = true
         polledRecordId.value = status.record_id ?? null
