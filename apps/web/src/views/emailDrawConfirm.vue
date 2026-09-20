@@ -1,7 +1,18 @@
 <template>
   <div class="min-h-screen bg-white flex items-center justify-center p-4">
+    <!-- 已撤销：码已恢复可用，可重新点击邮件链接参与 -->
+    <div v-if="undone" class="w-full max-w-md">
+      <div class="rounded-xl border border-amber-100 bg-amber-50 p-6 text-center space-y-3">
+        <div class="text-4xl">↺</div>
+        <p class="text-lg font-semibold text-amber-800">已撤销本次抽奖</p>
+        <p class="text-sm text-amber-700">
+          抽奖码已恢复可用，可重新点击邮件中的「点击抽奖」链接再次参与
+        </p>
+      </div>
+    </div>
+
     <!-- 加载 / 抽奖执行中 -->
-    <div v-if="!done && !error" class="text-gray-800 text-center">
+    <div v-else-if="!done && !error" class="text-gray-800 text-center">
       <div
         class="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-800 mx-auto mb-4"
       ></div>
@@ -75,6 +86,20 @@
       </div>
     </div>
 
+    <!-- 撤销入口（隐蔽式，与抽奖页同款）：屏幕左下角，hover 显形；
+         凭证 = 记录 id + 邮件链接里的抽奖码（码只发给本人邮箱）。
+         Teleport 到 body + pointer-events-auto：模态外元素不受 body 点击锁定影响 -->
+    <Teleport to="body">
+      <button
+        v-if="done && !error && recordId"
+        class="pointer-events-auto fixed bottom-3 left-4 z-60 text-[11px] text-gray-400/40 hover:text-red-500 opacity-30 hover:opacity-100 transition-all duration-200 select-none"
+        title="撤销本次抽奖（恢复库存/抽奖码，删除本次记录）"
+        @click="handleUndo"
+      >
+        ↺ 撤销本次抽奖
+      </button>
+    </Teleport>
+
     <Toaster />
   </div>
 </template>
@@ -100,6 +125,10 @@ const result = ref<{
 } | null>(null)
 const done = ref(false)
 const error = ref('')
+/** 本次抽奖记录 id（撤销凭证之一；测试码无记录则不显示撤销入口） */
+const recordId = ref<number | null>(null)
+/** 已撤销：置回待参与状态（码已恢复可用，可重新点击邮件链接） */
+const undone = ref(false)
 
 // 活动的「点击链接直接显示结果」设置（默认 false=仅确认，结果回大屏看）
 const showResultOnClick = ref(true)
@@ -136,6 +165,7 @@ const execute = async () => {
 
     const res = await lotteryApi.confirmEmailDraw(activityId, edrawCode)
     result.value = { is_winner: res.is_winner, prize: res.prize || null }
+    recordId.value = res.lottery_record?.id ?? null
     done.value = true
 
     // 「点击链接直接显示结果」关闭时：不在本设备展示结果（含 toast），只确认
@@ -152,6 +182,33 @@ const execute = async () => {
       msg = (err as { message: string }).message
     }
     error.value = msg
+  }
+}
+
+// 撤销本次抽奖（记录 id + 邮件码为凭证，与抽奖同信任级；已签字记录后端拒绝）
+const undoing = ref(false)
+const handleUndo = async () => {
+  if (!recordId.value || undoing.value) return
+  const summary = result.value?.is_winner
+    ? `撤销后本次中奖记录将删除，奖品「${result.value.prize?.name ?? '-'}」库存恢复，抽奖码置回未使用。`
+    : '撤销后本次抽奖记录将删除，抽奖码置回未使用。'
+  if (!confirm(`确定撤销本次抽奖吗？\n\n${summary}`)) return
+
+  undoing.value = true
+  try {
+    await lotteryApi.undoDraw(activityId, {
+      record_id: recordId.value,
+      lottery_code: edrawCode,
+    })
+    toast.success('已撤销：库存/抽奖码已恢复，可重新点击邮件链接参与')
+    done.value = false
+    result.value = null
+    recordId.value = null
+    undone.value = true
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : '撤销失败，请重试')
+  } finally {
+    undoing.value = false
   }
 }
 
