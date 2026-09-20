@@ -1,6 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express'
 import { body, validationResult } from 'express-validator'
-import { authenticateToken, requireAdmin } from '../middleware/auth'
+import { authenticateToken, requireAdmin, optionalAuth } from '../middleware/auth'
 import { logLotteryDraw } from '../middleware/operation-logger'
 import { createError } from '../utils/custom-error'
 import { AppDataSource } from '../utils/database'
@@ -1050,14 +1050,16 @@ router.post(
 
 /**
  * @route   POST /api/lottery/activities/:id/records/:recordId/signature
- * @desc    上传签字图片（PNG data URL 直接存库）
- * @access  Private (Admin)
+ * @desc    上传签字图片（PNG data URL 直接存库）。双通道：
+ *          ① 管理员 token —— 可签/重签（覆盖）自己活动的任意记录（管理端补签/重签）；
+ *          ② 参与者无登录 —— 凭「记录 id + 本次抽奖码」作为归属凭证（与 undo-draw
+ *            同信任级），仅可签未签记录（覆盖重签是管理员操作）。
+ * @access  Public（optionalAuth；参与者路径受抽奖码凭证约束，/lottery 全局限流）
  */
 router.post(
   '/activities/:id/records/:recordId/signature',
   [
-    authenticateToken,
-    requireAdmin,
+    optionalAuth,
     body('image')
       .notEmpty()
       .withMessage('签字图片不能为空')
@@ -1079,12 +1081,13 @@ router.post(
         throw createError('BUSINESS_ACTIVITY_NOT_FOUND')
       }
 
-      // 检查用户权限
-      if (
-        (req as any).user.role !== 'super_admin' &&
-        activity.created_by !== (req as any).user.id
-      ) {
-        throw createError('AUTH_INSUFFICIENT_PERMISSION', '只能管理自己创建的活动')
+      // 检查用户权限（管理员通道：token 由 optionalAuth 解出；无效 token 视为匿名走参与者通道）
+      const reqUser = (req as any).user
+      const isAdmin = !!reqUser && ['admin', 'super_admin'].includes(reqUser.role)
+      if (isAdmin) {
+        if (reqUser.role !== 'super_admin' && activity.created_by !== reqUser.id) {
+          throw createError('AUTH_INSUFFICIENT_PERMISSION', '只能管理自己创建的活动')
+        }
       }
 
       // 查找抽奖记录
@@ -1096,6 +1099,22 @@ router.post(
       // 校验记录属于该活动
       if (record.activity_id !== activityId) {
         throw createError('VALIDATION_INVALID_FORMAT', '该记录不属于此活动')
+      }
+
+      // 参与者通道：抽奖码即归属凭证（与 undo-draw 同信任级）；
+      // 已签记录不允许覆盖（重签是管理员操作，签字是最终确认）
+      if (!isAdmin) {
+        const providedCode =
+          typeof req.body.lottery_code === 'string' ? req.body.lottery_code.trim() : ''
+        const recordCode = record.lottery_code_id
+          ? await AppDataSource.getRepository(LotteryCode).findOneBy({ id: record.lottery_code_id })
+          : null
+        if (!providedCode || !recordCode || recordCode.code !== providedCode) {
+          throw createError('AUTH_INSUFFICIENT_PERMISSION', '抽奖码与本次记录不匹配')
+        }
+        if (record.signature_status === 'signed') {
+          throw createError('BUSINESS_SIGNATURE_EXISTS', '该记录已签字确认')
+        }
       }
 
       // operator_id 有无仅区分抽奖通道（线下=管理员操作 / 线上=参与者自抽，含邮箱即抽），

@@ -333,7 +333,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { Input } from '@/components/ui/input'
 import {
   Dialog,
@@ -344,13 +343,10 @@ import {
 } from '@/components/ui/dialog'
 import { Gift, Delete } from 'lucide-vue-next'
 import { toast, Toaster } from 'vue-sonner'
-import { lotteryApi, adminActivityApi, authApi } from '@/api'
-import { useUserStore } from '@/stores/user'
+import { lotteryApi, adminActivityApi } from '@/api'
 import type { Activity, Prize, LotteryRecord } from '@/types/api'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
 
-const router = useRouter()
-const userStore = useUserStore()
 const urlParams = new URLSearchParams(window.location.search)
 const activityId = Number(urlParams.get('activityId'))
 
@@ -474,32 +470,6 @@ const deleteNumber = () => {
   lotteryCode.value = lotteryCode.value.slice(0, -1)
 }
 
-// 检查用户是否已登录（仅offline模式需要）
-const checkAuthForOffline = async (): Promise<boolean> => {
-  if (activityInfo.value?.lottery_mode !== 'offline') {
-    return true // online模式不需要登录
-  }
-
-  // 检查是否有token
-  if (!userStore.token) {
-    toast.error('线下活动需管理员登录')
-    router.push('/login')
-    return false
-  }
-
-  // 验证token是否有效
-  try {
-    await authApi.me()
-    return true
-  } catch {
-    // token无效，清除并跳转登录
-    userStore.clearToken()
-    toast.error('线下活动需管理员登录')
-    router.push('/login')
-    return false
-  }
-}
-
 // 加载活动信息
 const loadActivityInfo = async () => {
   if (!activityId) {
@@ -573,35 +543,18 @@ const handleDraw = async (opts?: { forceOnline?: boolean }) => {
     }
   }
 
-  // 检查offline模式下的登录状态（邮件链接路径跳过：凭码即可，无需管理员）
-  if (!forceOnline) {
-    const isAuthorized = await checkAuthForOffline()
-    if (!isAuthorized) {
-      return
-    }
-  }
-
+  // 抽奖是公开动作：抽奖码即凭证（线上/线下/邮件链接同一公开端点，均无需登录）
   try {
     isDrawing.value = true
 
-    let drawResponse
-
-    if (activityInfo.value?.lottery_mode === 'online' || forceOnline) {
-      // 线上抽奖（含邮件链接自动抽奖）
-      drawResponse = await lotteryApi.draw(activityId, {
-        lottery_code: lotteryCode.value,
-        participant_info: {
-          name: participantInfo.value.name,
-          phone: participantInfo.value.phone,
-          email: participantInfo.value.email || undefined,
-        },
-      })
-    } else {
-      // 线下抽奖
-      drawResponse = await adminActivityApi.offlineDraw(activityId, {
-        lottery_code: lotteryCode.value,
-      })
-    }
+    const drawResponse = await lotteryApi.draw(activityId, {
+      lottery_code: lotteryCode.value,
+      participant_info: {
+        name: participantInfo.value.name,
+        phone: participantInfo.value.phone,
+        email: participantInfo.value.email || undefined,
+      },
+    })
 
     // 邮箱链接路径 + 活动配置「点击不显示结果」：仅确认参与（结果与 toast 都不在本机展示）
     if (forceOnline && edrawHideResult.value) {
@@ -807,6 +760,8 @@ const handleSignatureConfirm = async (dataUrl: string) => {
   try {
     await adminActivityApi.uploadSignature(activityId, currentRecordId.value, {
       image: dataUrl,
+      // 公开签字凭证：本次抽奖码（管理员 token 存在时后端走管理员通道，无需它）
+      lottery_code: lastDrawnCode.value || undefined,
     })
     toast.success('签字提交成功')
     showSignature.value = false

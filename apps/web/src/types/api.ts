@@ -436,6 +436,8 @@ export interface UndoDrawResponse {
 // 签字上传（PNG data URL）
 export interface UploadSignatureRequest {
   image: string
+  /** 公开签字凭证：本次抽奖码（有管理员 token 时可省略，后端走管理员通道） */
+  lottery_code?: string
 }
 
 export interface UploadSignatureResponse {
