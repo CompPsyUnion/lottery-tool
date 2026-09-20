@@ -21,13 +21,34 @@ const limiterPromise: Promise<{
 }> = import('email-poster').then((m) => m.createEmailLimiter())
 
 /**
- * 邮箱即抽单独限频实例：去除每分钟限制（活动现场同邮箱连发重试常见），
- * 仅保留每日上限（默认 10 封）防邮件轰炸。per-minute 提到 60 ≈ 每秒 1 封，
- * 对人工操作等于无感限制。注册验证码（code）与测试邮件仍走上面 1/min 实例。
+ * 邮箱即抽单独限频：10s/封（token bucket：容量 1、每秒回 0.1 个 = 发一次后
+ * 需等 10 秒才有下一个令牌）+ 每日上限（默认 10 封）防邮件轰炸。
+ * 每日维度复用 createEmailLimiter（per-minute 提到 60 使其分钟限制不再生效）；
+ * 注册验证码（code）与测试邮件仍走上面 1/min 实例。
  */
 const emailDrawLimiterPromise: Promise<{
   checkTarget: (flow: string, email: string) => LimitResult
 }> = import('email-poster').then((m) => m.createEmailLimiter({ targetPerMinute: 60 }))
+
+/** 每邮箱一个 10s 令牌桶（email-poster 原语）；24h 未用即清扫，防 Map 无限增长 */
+const drawBucketsPromise: Promise<{
+  buckets: Map<string, { tryTake: () => boolean; lastAt: number }>
+  make: () => { tryTake: () => boolean }
+}> = import('email-poster').then((m) => ({
+  buckets: new Map(),
+  make: () =>
+    m.tokenBucket({ capacity: 1, refillPerSec: 0.1 }) as {
+      tryTake: () => boolean
+    },
+}))
+
+const DRAW_BUCKET_TTL_MS = 24 * 60 * 60 * 1000
+
+function pruneDrawBuckets(buckets: Map<string, { tryTake: () => boolean; lastAt: number }>): void {
+  if (buckets.size < 5000) return
+  const now = Date.now()
+  for (const [k, v] of buckets) if (now - v.lastAt > DRAW_BUCKET_TTL_MS) buckets.delete(k)
+}
 
 function limitMessage(r: LimitResult): string {
   if (r.reason === 'minute' && r.retryInSeconds) {
@@ -44,10 +65,22 @@ export async function checkCodeSendLimit(
   return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
 }
 
-/** 邮箱即抽确认邮件的发送频控（独立实例：无每分钟限制，仅每日上限） */
+/** 邮箱即抽确认邮件的发送频控（10s/封 + 每日上限） */
 export async function checkEmailDrawSendLimit(
   email: string,
 ): Promise<{ allowed: boolean; message?: string }> {
+  const { buckets, make } = await drawBucketsPromise
+  pruneDrawBuckets(buckets)
+  let bucket = buckets.get(email)
+  if (!bucket) {
+    bucket = { tryTake: make().tryTake, lastAt: Date.now() }
+    buckets.set(email, bucket)
+  }
+  if (!bucket.tryTake()) {
+    return { allowed: false, message: '发送过于频繁，请 10 秒后再试' }
+  }
+  bucket.lastAt = Date.now()
+
   const limiter = await emailDrawLimiterPromise
   const r = limiter.checkTarget('emaildraw', email)
   return r.allowed ? { allowed: true } : { allowed: false, message: limitMessage(r) }
