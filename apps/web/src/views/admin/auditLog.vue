@@ -145,20 +145,36 @@ const columns: TableColumn[] = [
   },
   {
     key: 'quantity_before',
-    title: '库存 前 → 后',
-    width: '120px',
+    title: '操作前',
+    width: '90px',
     align: 'center',
     render: (_v: unknown, record: Record<string, unknown>) => {
       const log = record as unknown as AuditLog
       if (log.quantity_before === null || log.quantity_before === undefined) {
-        // 码类动作：显示 delta
-        const d = log.delta ?? 0
-        const color = d > 0 ? 'text-green-600' : d < 0 ? 'text-red-600' : 'text-muted-foreground'
-        return `<span class="font-medium ${color}">${d > 0 ? '+' : ''}${d} 码</span>`
+        return '<span class="text-muted-foreground">-</span>'
       }
+      const unit = String(log.action ?? '').startsWith('CODE_') ? ' 码' : ''
+      return `<span class="tabular-nums" title="${String(log.action ?? '').startsWith('CODE_') ? '操作前抽奖码总数' : '操作前该奖品剩余库存'}">${log.quantity_before}${unit}</span>`
+    },
+  },
+  {
+    key: 'quantity_after',
+    title: '操作后',
+    width: '100px',
+    align: 'center',
+    render: (_v: unknown, record: Record<string, unknown>) => {
+      const log = record as unknown as AuditLog
       const d = log.delta ?? 0
       const color = d < 0 ? 'text-red-600' : d > 0 ? 'text-green-600' : 'text-muted-foreground'
-      return `<span class="tabular-nums">${log.quantity_before} → ${log.quantity_after} <span class="font-medium ${color}">(${d > 0 ? '+' : ''}${d})</span></span>`
+      const unit = String(log.action ?? '').startsWith('CODE_') ? ' 码' : ''
+      // 前后均有值：数值 + 变化量；旧数据只有 delta（码类早期记录）：仅显示净变化
+      if (log.quantity_after !== null && log.quantity_after !== undefined) {
+        return `<span class="tabular-nums" title="操作后${String(log.action ?? '').startsWith('CODE_') ? '抽奖码总数' : '该奖品剩余库存'}">${log.quantity_after}${unit} <span class="font-medium ${color}">(${d > 0 ? '+' : ''}${d})</span></span>`
+      }
+      if (d !== 0) {
+        return `<span class="font-medium ${color}">${d > 0 ? '+' : ''}${d}${unit || ' 码'}</span>`
+      }
+      return '<span class="text-muted-foreground">-</span>'
     },
   },
   {

@@ -276,6 +276,7 @@ import {
   ExternalLink,
   PenLine,
   SquarePen,
+  Undo2,
 } from 'lucide-vue-next'
 import DemoDrawDialog from '@/components/admin/demoDrawDialog.vue'
 import SignatureDialog from '@/components/common/SignatureDialog.vue'
@@ -426,6 +427,30 @@ const columns: TableColumn[] = [
           onClick: () => openResign(record),
         },
         [h(PenLine, { class: 'w-4 h-4' }), '补签'],
+      )
+    },
+  },
+  {
+    key: 'undo',
+    title: '操作',
+    width: '80px',
+    align: 'center',
+    render: (_value: unknown, row: unknown) => {
+      const record = row as LotteryRecord
+      const isSigned = record.signature_status === 'signed'
+      const btnCls =
+        'inline-flex items-center gap-1 text-sm font-medium transition-colors disabled:opacity-40'
+      return h(
+        'button',
+        {
+          class: `${btnCls} text-muted-foreground hover:text-red-600`,
+          title: isSigned
+            ? '已签字确认的抽奖不可撤销'
+            : '撤销本次抽奖（恢复奖品库存、抽奖码置回未使用、删除本记录）',
+          disabled: isSigned,
+          onClick: () => handleUndoRecord(record),
+        },
+        [h(Undo2, { class: 'w-4 h-4' }), '撤销'],
       )
     },
   },
@@ -607,6 +632,29 @@ const openSignaturePreview = async (record: LotteryRecord) => {
     showSignaturePreview.value = true
   } catch (err) {
     console.error('获取签字图片失败:', err)
+  }
+}
+
+// ---- 撤销抽奖记录（逐行）：走公开 undo 端点，凭证 = 记录 id + 该行抽奖码 ----
+const handleUndoRecord = async (record: LotteryRecord) => {
+  const prizeName = typeof record.prize === 'string' ? record.prize : (record.prize?.name ?? '-')
+  const summary = record.is_winner
+    ? `撤销后「${record.lotteryCode}」的中奖记录将删除，奖品「${prizeName}」库存恢复，抽奖码置回未使用。`
+    : `撤销后「${record.lotteryCode}」的抽奖记录将删除，抽奖码置回未使用。`
+  if (!confirm(`确定撤销这条抽奖记录吗？\n\n${summary}`)) return
+
+  try {
+    const res = await API.lottery.undoDraw(activityId, {
+      record_id: record.id,
+      lottery_code: record.lotteryCode,
+    })
+    toast.success(
+      res.is_test ? '测试抽奖无实际副作用，已确认撤销' : '已撤销：库存/抽奖码已恢复，记录已删除',
+    )
+    // 库存与码计数随撤销变化，三项一并刷新
+    await Promise.all([fetchLotteryRecords(), fetchActivity(), fetchPrizes()])
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : '撤销失败，请重试')
   }
 }
 

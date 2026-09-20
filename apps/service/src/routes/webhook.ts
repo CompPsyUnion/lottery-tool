@@ -285,6 +285,9 @@ router.post(
         return duplicateResponse()
       }
 
+      // 审计用码量前值（建码前总数）
+      const countBefore = await LotteryCodeService.countByActivity(activity.id)
+
       try {
         await AppDataSource.getRepository(LotteryCode).save({
           activity_id: activity.id,
@@ -300,12 +303,14 @@ router.post(
         throw error
       }
 
-      // 审计：kdocs 建码（抽奖码 + 抽奖人身份：邮箱优先，无邮箱记姓名）
+      // 审计：kdocs 建码（抽奖码 + 码量 before/after；抽奖人身份：邮箱优先，无邮箱记姓名）
       const kdocsActor = participantInfo.email || participantInfo.name || null
       await AuditService.record({
         activity_id: activity.id,
         action: 'CODE_CREATE',
         lottery_code: code,
+        quantity_before: countBefore,
+        quantity_after: countBefore + 1,
         delta: 1,
         actor_type: kdocsActor ? 'participant' : 'system',
         actor: kdocsActor,

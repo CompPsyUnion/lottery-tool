@@ -898,6 +898,22 @@ router.post(
         status: 'unused',
       })
 
+      // 审计：单个新增（码量 before/after；此前该路由漏记审计）
+      await AuditService.record({
+        activity_id: parseInt(activityId),
+        action: 'CODE_CREATE',
+        lottery_code: code,
+        quantity_before: existingCount,
+        quantity_after: existingCount + 1,
+        delta: 1,
+        actor_type: 'admin',
+        actor: (req as any).user.username,
+        user_id: (req as any).user.id,
+        ip_address: req.ip,
+        user_agent: req.get('User-Agent'),
+        detail: `新增抽奖码 ${code}`,
+      })
+
       res.status(201).json({
         success: true,
         data: {
@@ -937,16 +953,24 @@ router.post(
 
       const activity = await requireActivityAccess(activityId, req)
 
+      // 审计用码量前值（导入前总数）
+      const countBefore = await LotteryCodeService.countByActivity(parseInt(activityId))
+
       const result = await LotteryCodeService.importLotteryCodes(
         activity,
         codes as LotteryCodeService.ImportRowInput[],
         mode,
       )
 
-      // 审计：导入/覆盖（码量净变化 = 新建 - 删除；库存不动）
+      // 审计用码量后值（导入后总数）
+      const countAfter = await LotteryCodeService.countByActivity(parseInt(activityId))
+
+      // 审计：导入/覆盖（码量 before/after 与净变化；库存不动）
       await AuditService.record({
         activity_id: parseInt(activityId),
         action: result.mode === 'replace' ? 'CODE_REPLACE' : 'CODE_IMPORT',
+        quantity_before: countBefore,
+        quantity_after: countAfter,
         delta: result.created.length - result.deleted_count,
         actor_type: 'admin',
         actor: (req as any).user.username,
@@ -999,15 +1023,20 @@ router.post(
 
       await requireActivityAccess(activityId, req)
 
+      // 审计用码量前值（删除前总数）
+      const countBefore = await LotteryCodeService.countByActivity(parseInt(activityId))
+
       const result = await LotteryCodeService.deleteCodesByIds(parseInt(activityId), ids)
 
       const deletedIds = new Set(result.deleted.map((c) => c.id))
       const usedDeleted = result.deleted.filter((c) => c.status === 'used').length
 
-      // 审计：码删除（码量净减少；含级联记录数）
+      // 审计：码删除（码量 before/after；含级联记录数）
       await AuditService.record({
         activity_id: parseInt(activityId),
         action: 'CODE_DELETE',
+        quantity_before: countBefore,
+        quantity_after: countBefore - result.deleted.length,
         delta: -result.deleted.length,
         actor_type: 'admin',
         actor: (req as any).user.username,
