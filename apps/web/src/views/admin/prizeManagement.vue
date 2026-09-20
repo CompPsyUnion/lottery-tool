@@ -79,10 +79,12 @@
             </FormItem>
           </FormField>
 
-          <FormField v-slot="{ componentField }" name="description">
+          <FormField v-slot="{ field: componentField }" name="description">
             <FormItem>
               <FormLabel>奖品描述</FormLabel>
               <FormControl>
+                <!-- 原生 textarea 必须用 field 包（value+onInput）：
+                     componentField 的 modelValue 对原生元素无效，会导致回填不显示 -->
                 <textarea
                   class="flex min-h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="奖品说明（可选），不超过500字"
