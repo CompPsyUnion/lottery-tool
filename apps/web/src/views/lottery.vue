@@ -250,15 +250,6 @@
 
         <DialogFooter class="pt-6">
           <div class="w-full flex justify-center gap-3">
-            <!-- 撤销本次操作：中奖在签字完成前可撤销（恢复库存/码/删记录）；
-                 轮询来源的结果本机无抽奖码，撤销仅在邮件链接打开的设备可用 -->
-            <button
-              v-if="!resultFromPoll"
-              class="px-6 py-3 border border-red-200 text-red-600 hover:bg-red-50 font-medium rounded-xl transition-all duration-200"
-              @click="showUndoConfirm = true"
-            >
-              撤销本次操作
-            </button>
             <!-- 需要签字：主按钮为「去签字」，手动进入必签流程 -->
             <button
               v-if="pendingSignature"
@@ -325,6 +316,22 @@
       @confirm="handleSignatureConfirm"
       @undo="showUndoConfirm = true"
     />
+
+    <!-- 撤销入口（隐蔽式）：不放结果弹窗内，固定屏幕左下角浮于遮罩之上。
+         模态开启时 reka-ui 给 body 加 pointer-events:none（点击锁定），Teleport 到
+         body 的按钮必须自带 pointer-events-auto 才可点；z-60 高于遮罩/内容（z-50）。
+         低对比小字常态近乎隐形，hover 显形。撤销仅中奖签字前可用；
+         轮询来源的结果本机无抽奖码，撤销仅在邮件链接打开的设备可用 -->
+    <Teleport to="body">
+      <button
+        v-if="showResult && !resultFromPoll"
+        class="pointer-events-auto fixed bottom-3 left-4 z-60 text-[11px] text-gray-400/40 hover:text-red-500 opacity-30 hover:opacity-100 transition-all duration-200 select-none"
+        title="撤销本次抽奖（恢复库存/抽奖码，删除本次记录）"
+        @click="showUndoConfirm = true"
+      >
+        ↺ 撤销本次抽奖
+      </button>
+    </Teleport>
 
     <!-- Toast 组件 -->
     <Toaster />
