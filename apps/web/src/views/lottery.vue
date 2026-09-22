@@ -102,6 +102,7 @@
             class="w-full text-center text-lg md:text-2xl lg:text-3xl font-mono tracking-wider lottery-code-input"
             :maxlength="getMaxLength()"
             @input="onInputChange"
+            @keyup.enter="canDraw && !isDrawing && handleDraw()"
           />
         </div>
 
