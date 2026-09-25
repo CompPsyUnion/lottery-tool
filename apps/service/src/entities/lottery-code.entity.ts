@@ -22,6 +22,12 @@ export type LotteryCodeStatus = 'unused' | 'used' | 'invalid'
 
 @Entity({ name: 'lottery_codes' })
 @Index('uq_lottery_codes_activity_code', ['activity_id', 'code'], { unique: true })
+// 部分唯一索引：声明进实体元数据，migration:generate 才不会因元数据缺失而想 DROP 它
+// （谓词须与 1788417306770 迁移建索引的原文一致）
+@Index('uq_lottery_codes_activity_is_test', ['activity_id'], {
+  unique: true,
+  where: '"is_test" = true',
+})
 export class LotteryCode {
   @PrimaryGeneratedColumn('increment', {
     type: 'integer',

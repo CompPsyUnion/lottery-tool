@@ -139,9 +139,21 @@ const columns: TableColumn[] = [
   {
     key: 'prize_name',
     title: '奖品',
-    width: '140px',
-    render: (value: unknown) =>
-      value ? `<span>${value}</span>` : '<span class="text-muted-foreground">-</span>',
+    width: '160px',
+    render: (_value: unknown, record: Record<string, unknown>) => {
+      const log = record as unknown as AuditLog
+      if (!log.prize_name) return '<span class="text-muted-foreground">-</span>'
+      const desc = log.prize_description?.trim()
+      // 描述快照：第二行灰字截断展示，悬停看全文（历史已删奖品无描述，仅剩名）
+      const descLine = desc
+        ? `<p class="text-xs text-muted-foreground leading-snug line-clamp-2" title="${desc.replace(/"/g, '&quot;')}">${desc}</p>`
+        : ''
+      // id 快照：名后小字标注（奖品已删时仍可凭 id 在备份/导出中溯源）
+      const idTag = log.prize_id
+        ? ` <span class="text-[10px] text-muted-foreground/70">#${log.prize_id}</span>`
+        : ''
+      return `<div class="space-y-0.5"><span>${log.prize_name}</span>${idTag}${descLine}</div>`
+    },
   },
   {
     key: 'quantity_before',

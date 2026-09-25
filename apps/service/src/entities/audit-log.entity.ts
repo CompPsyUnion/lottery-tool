@@ -59,6 +59,14 @@ export class AuditLog {
   @Column({ name: 'prize_name', type: 'varchar', length: 100, nullable: true })
   prize_name!: string | null
 
+  /** 奖品描述快照（随名一并留存；历史行由迁移按 activity+name 回填，删掉的奖品无法恢复） */
+  @Column({ name: 'prize_description', type: 'varchar', length: 500, nullable: true })
+  prize_description!: string | null
+
+  /** 奖品 id 快照：奖品删除后仍是稳定指针（历史行经 prizes 或抽奖记录回填） */
+  @Column({ name: 'prize_id', type: 'integer', nullable: true })
+  prize_id!: number | null
+
   /** 奖品剩余库存：变动前（码类动作为 null） */
   @Column({ name: 'quantity_before', type: 'integer', nullable: true })
   quantity_before!: number | null

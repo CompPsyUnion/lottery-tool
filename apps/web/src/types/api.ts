@@ -338,6 +338,10 @@ export interface AuditLog {
   action: AuditAction
   lottery_code?: string | null
   prize_name?: string | null
+  /** 奖品描述快照（奖品删除后仍可读；历史已删奖品为 null） */
+  prize_description?: string | null
+  /** 奖品 id 快照：奖品删除后仍是稳定指针（历史行经 prizes/抽奖记录回填） */
+  prize_id?: number | null
   quantity_before?: number | null
   quantity_after?: number | null
   delta: number

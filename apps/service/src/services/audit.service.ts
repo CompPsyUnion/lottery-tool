@@ -1,6 +1,7 @@
 import { EntityManager } from 'typeorm'
 import { AppDataSource } from '../utils/database'
 import { AuditLog, AuditAction } from '../entities/audit-log.entity'
+import { Prize } from '../entities/prize.entity'
 
 /** 动作枚举值列表（路由校验与前端选项对齐用） */
 export const AUDIT_ACTIONS = [
@@ -36,6 +37,8 @@ export interface AuditEntry {
   ip_address?: string | null
   user_agent?: string | null
   detail?: string | null
+  prize_description?: string | null
+  prize_id?: number | null
 }
 
 /**
@@ -52,6 +55,19 @@ export async function record(entry: AuditEntry, manager?: EntityManager): Promis
       ? quantityAfter - quantityBefore
       : (entry.delta ?? 0)
 
+  // 奖品描述/ID 快照：随名一并留存（奖品删除后审计仍可读，ID 是稳定指针）。
+  // 调用方未显式提供时按 activity+name 就地补查（同一 manager，事务内一致；
+  // 同名奖品会任取一条——各调用点尽量显式传，这里只是兜底）
+  let prizeDescription = entry.prize_description ?? null
+  let prizeId = entry.prize_id ?? null
+  if ((!prizeDescription || !prizeId) && entry.prize_name) {
+    const prize = await managerOf(manager)
+      .getRepository(Prize)
+      .findOneBy({ activity_id: entry.activity_id, name: entry.prize_name })
+    prizeDescription = prizeDescription ?? prize?.description ?? null
+    prizeId = prizeId ?? prize?.id ?? null
+  }
+
   return managerOf(manager)
     .getRepository(AuditLog)
     .save({
@@ -59,6 +75,8 @@ export async function record(entry: AuditEntry, manager?: EntityManager): Promis
       action: entry.action,
       lottery_code: entry.lottery_code ?? null,
       prize_name: entry.prize_name ?? null,
+      prize_description: prizeDescription,
+      prize_id: prizeId,
       quantity_before: quantityBefore,
       quantity_after: quantityAfter,
       delta,

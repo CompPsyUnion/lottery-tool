@@ -14,6 +14,7 @@ import { AddActivityStatusReady1788431974008 } from './1788431974008-AddActivity
 import { AddLotteryRecordIsTest1788443250000 } from './1788443250000-AddLotteryRecordIsTest'
 import { CreateAuditLogs1789350000000 } from './1789350000000-CreateAuditLogs'
 import { AddLotteryCodeRequestToken1789865497484 } from './1789865497484-AddLotteryCodeRequestToken'
+import { AddAuditPrizeDescription1790338671470 } from './1790338671470-AddAuditPrizeDescription'
 
 // typeorm@1 typings expect `MixedList<string | Function>` for the DataSource
 // option; migration classes satisfy that at runtime (classes are functions)
@@ -27,4 +28,5 @@ export const migrations = [
   AddLotteryRecordIsTest1788443250000,
   CreateAuditLogs1789350000000,
   AddLotteryCodeRequestToken1789865497484,
+  AddAuditPrizeDescription1790338671470,
 ] as unknown as (string | Function)[]

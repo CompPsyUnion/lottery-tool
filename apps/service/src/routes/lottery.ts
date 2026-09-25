@@ -439,6 +439,8 @@ router.post(
             action: 'UNDO_DRAW',
             lottery_code: record.lotteryCode!.code,
             prize_name: record.prize ? record.prize.name : null,
+            prize_id: record.prize ? record.prize.id : null,
+            prize_description: record.prize ? (record.prize.description ?? null) : null,
             quantity_before: restoreBefore,
             quantity_after:
               record.is_winner && record.prize ? record.prize.remaining_quantity : restoreBefore,

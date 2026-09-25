@@ -230,8 +230,8 @@
               <p class="text-sm text-slate-600 font-medium mb-2">中奖信息</p>
               <div class="space-y-1 text-sm text-slate-700">
                 <p>
-                  <span class="font-medium">姓名：</span
-                  >{{ lotteryResult.lottery_code.participant_info.name }}
+                  <span class="font-medium">姓名：</span>
+                  {{ lotteryResult.lottery_code.participant_info.name }}
                 </p>
                 <p>
                   <span class="font-medium">抽奖码：</span>{{ lotteryResult.lottery_code.code }}
